@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { verifyToken } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "./prisma";
 
@@ -10,11 +10,27 @@ export interface AuthContext {
 
 /**
  * Resolve Clerk session → local User. Creates user lazily on first call.
+ * Reads Authorization: Bearer <token> header (cross-origin API usage).
  * Reads X-Org-Id header for multi-tenant scoping.
  */
 export async function requireAuth(req: NextRequest): Promise<AuthContext> {
-  const { userId: clerkId } = await auth();
+  const authHeader = req.headers.get("authorization");
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
 
+  if (!token) {
+    throw new ApiError(401, "Not authenticated");
+  }
+
+  let payload: { sub?: string } | null = null;
+  try {
+    payload = await verifyToken(token, {
+      secretKey: process.env.CLERK_SECRET_KEY!,
+    });
+  } catch {
+    throw new ApiError(401, "Not authenticated");
+  }
+
+  const clerkId = payload?.sub;
   if (!clerkId) {
     throw new ApiError(401, "Not authenticated");
   }
@@ -78,21 +94,34 @@ export class ApiError extends Error {
   }
 }
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": process.env.FRONTEND_URL ?? "http://localhost:3000",
+  "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Org-Id",
+  "Access-Control-Allow-Credentials": "true",
+};
+
 /**
- * Wrap a route handler with error handling.
+ * Wrap a route handler with CORS + error handling.
  */
 export function handler(
   fn: (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<NextResponse>
 ) {
   return async (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => {
+    // Handle CORS preflight
+    if (req.method === "OPTIONS") {
+      return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+    }
     try {
-      return await fn(req, ctx);
+      const res = await fn(req, ctx);
+      Object.entries(CORS_HEADERS).forEach(([k, v]) => res.headers.set(k, v));
+      return res;
     } catch (err) {
       if (err instanceof ApiError) {
-        return NextResponse.json({ error: err.message }, { status: err.status });
+        return NextResponse.json({ error: err.message }, { status: err.status, headers: CORS_HEADERS });
       }
       console.error("[API]", err);
-      return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+      return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: CORS_HEADERS });
     }
   };
 }
