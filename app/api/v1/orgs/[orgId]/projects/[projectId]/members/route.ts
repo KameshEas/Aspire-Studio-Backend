@@ -57,3 +57,24 @@ export const POST = handler(async (req: NextRequest, ctx) => {
 
   return NextResponse.json({ added: true }, { status: 201 });
 });
+
+/** DELETE /api/v1/orgs/[orgId]/projects/[projectId]/members — remove member */
+export const DELETE = handler(async (req: NextRequest, ctx) => {
+  const { orgId, projectId } = await ctx.params;
+  const { userId } = await requireAuth(req);
+  await requireOrgRole(userId, orgId, "admin");
+
+  const body = await req.json();
+  const { userId: targetUserId } = body as { userId: string };
+
+  if (!targetUserId) throw new ApiError(400, "userId is required");
+
+  const existing = await prisma.projectMember.findUnique({
+    where: { projectId_userId: { projectId, userId: targetUserId } },
+  });
+  if (!existing) throw new ApiError(404, "User is not a project member");
+
+  await prisma.projectMember.delete({ where: { projectId_userId: { projectId, userId: targetUserId } } });
+
+  return NextResponse.json({ removed: true });
+});
