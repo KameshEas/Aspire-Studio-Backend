@@ -1,6 +1,7 @@
 import { verifyToken } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "./prisma";
+import { corsPreflightResponse, applyCorsHeaders } from "./cors";
 
 export interface AuthContext {
   userId: string; // local DB user id
@@ -94,34 +95,29 @@ export class ApiError extends Error {
   }
 }
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": process.env.FRONTEND_URL ?? "http://localhost:3000",
-  "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Org-Id",
-  "Access-Control-Allow-Credentials": "true",
-};
-
 /**
- * Wrap a route handler with CORS + error handling.
+ * Wrap a route handler with CORS + security headers + error handling.
  */
 export function handler(
   fn: (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<NextResponse>
 ) {
   return async (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => {
-    // Handle CORS preflight
     if (req.method === "OPTIONS") {
-      return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+      return corsPreflightResponse();
     }
     try {
       const res = await fn(req, ctx);
-      Object.entries(CORS_HEADERS).forEach(([k, v]) => res.headers.set(k, v));
-      return res;
+      return applyCorsHeaders(res);
     } catch (err) {
       if (err instanceof ApiError) {
-        return NextResponse.json({ error: err.message }, { status: err.status, headers: CORS_HEADERS });
+        return applyCorsHeaders(
+          NextResponse.json({ error: err.message }, { status: err.status })
+        );
       }
       console.error("[API]", err);
-      return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: CORS_HEADERS });
+      return applyCorsHeaders(
+        NextResponse.json({ error: "Internal server error" }, { status: 500 })
+      );
     }
   };
 }

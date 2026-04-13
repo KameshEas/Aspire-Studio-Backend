@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAuth, requireOrgRole, handler, ApiError } from "@/lib/auth";
+import { validateString, validateOptionalString } from "@/lib/validation";
 
 /** GET /api/v1/orgs/[orgId]/projects/[projectId]/templates — list templates */
 export const GET = handler(async (req: NextRequest, ctx) => {
@@ -55,16 +56,20 @@ export const POST = handler(async (req: NextRequest, ctx) => {
   if (!body.name?.trim()) throw new ApiError(400, "Template name is required");
   if (!body.prompt?.trim()) throw new ApiError(400, "Prompt text is required");
 
+  const name = validateString(body.name, "name");
+  const prompt = validateString(body.prompt, "prompt");
+  const description = validateOptionalString(body.description, "description");
+
   const template = await prisma.template.create({
     data: {
       projectId,
-      name: body.name.trim(),
-      description: body.description?.trim() ?? null,
+      name,
+      description: description ?? null,
       createdBy: userId,
       versions: {
         create: {
           version: 1,
-          prompt: body.prompt.trim(),
+          prompt,
           variablesSchema: body.variablesSchema ?? undefined,
         },
       },

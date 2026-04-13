@@ -69,6 +69,7 @@ model OrganizationMember {
   user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([orgId, userId])
+  @@index([userId])
   @@map("organization_members")
 }
 
@@ -112,6 +113,7 @@ model ProjectMember {
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([projectId, userId])
+  @@index([userId])
   @@map("project_members")
 }
 
@@ -193,6 +195,8 @@ model Generation {
 
   @@index([projectId])
   @@index([status])
+  @@index([orgId])
+  @@index([createdAt(sort: Desc)])
   @@map("generations")
 }
 
@@ -221,6 +225,7 @@ model Artifact {
   @@index([projectId])
   @@index([generationId])
   @@index([type])
+  @@index([orgId])
   @@map("artifacts")
 }
 
@@ -390,6 +395,8 @@ model ChangeHistory {
   project Project?      @relation(fields: [projectId], references: [id])
   actor   User?         @relation("ChangeActor", fields: [actorId], references: [id])
 
+  @@index([orgId, createdAt(sort: Desc)])
+  @@index([actorId])
   @@map("change_history")
 }
 
@@ -406,6 +413,8 @@ model AuditLog {
   org   Organization? @relation(fields: [orgId], references: [id])
   actor User?         @relation("AuditActor", fields: [actorId], references: [id])
 
+  @@index([orgId, createdAt(sort: Desc)])
+  @@index([actorId])
   @@map("audit_logs")
 }
 

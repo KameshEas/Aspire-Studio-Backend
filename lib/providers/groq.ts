@@ -49,9 +49,13 @@ export class GroqAdapter implements ProviderAdapter {
   private client: OpenAI;
 
   constructor(apiKey?: string) {
+    const key = apiKey ?? process.env.GROQ_API_KEY;
+    if (!key) {
+      throw new Error("GROQ_API_KEY not configured. Set the GROQ_API_KEY environment variable.");
+    }
     this.client = new OpenAI({
       baseURL: "https://api.groq.com/openai/v1",
-      apiKey: apiKey ?? process.env.GROQ_API_KEY ?? "",
+      apiKey: key,
     });
   }
 

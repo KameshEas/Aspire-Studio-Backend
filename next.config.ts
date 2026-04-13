@@ -1,18 +1,13 @@
 import type { NextConfig } from "next";
-
-const ALLOWED_ORIGIN = process.env.FRONTEND_URL ?? "http://localhost:3000";
+import { CORS_HEADERS, SECURITY_HEADERS } from "./lib/cors";
 
 const nextConfig: NextConfig = {
   async headers() {
+    const allHeaders = { ...CORS_HEADERS, ...SECURITY_HEADERS };
     return [
       {
         source: "/api/:path*",
-        headers: [
-          { key: "Access-Control-Allow-Origin", value: ALLOWED_ORIGIN },
-          { key: "Access-Control-Allow-Methods", value: "GET,POST,PUT,PATCH,DELETE,OPTIONS" },
-          { key: "Access-Control-Allow-Headers", value: "Content-Type,Authorization,X-Org-Id" },
-          { key: "Access-Control-Allow-Credentials", value: "true" },
-        ],
+        headers: Object.entries(allHeaders).map(([key, value]) => ({ key, value })),
       },
     ];
   },

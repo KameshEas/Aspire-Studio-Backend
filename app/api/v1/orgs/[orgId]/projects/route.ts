@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAuth, requireOrgRole, handler, ApiError } from "@/lib/auth";
+import { validateString, validateOptionalString } from "@/lib/validation";
 
 /** GET /api/v1/orgs/[orgId]/projects — list projects */
 export const GET = handler(async (req: NextRequest, ctx) => {
@@ -38,14 +39,9 @@ export const POST = handler(async (req: NextRequest, ctx) => {
   await requireOrgRole(userId, orgId, "developer");
 
   const body = await req.json();
-  const { name, slug, description } = body as {
-    name: string;
-    slug: string;
-    description?: string;
-  };
-
-  if (!name || !slug) throw new ApiError(400, "name and slug are required");
-  if (!/^[a-z0-9-]+$/.test(slug)) throw new ApiError(400, "slug must be lowercase alphanumeric with hyphens");
+  const name = validateString(body.name, "name");
+  const slug = validateString(body.slug, "slug");
+  const description = validateOptionalString(body.description, "description");
 
   const existing = await prisma.project.findUnique({
     where: { orgId_slug: { orgId, slug } },

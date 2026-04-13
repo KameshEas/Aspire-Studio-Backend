@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAuth, handler, ApiError } from "@/lib/auth";
+import { validateString } from "@/lib/validation";
 
 /** GET /api/v1/orgs — list orgs the user belongs to */
 export const GET = handler(async (req: NextRequest) => {
@@ -33,10 +34,8 @@ export const GET = handler(async (req: NextRequest) => {
 export const POST = handler(async (req: NextRequest) => {
   const { userId } = await requireAuth(req);
   const body = await req.json();
-  const { name, slug } = body as { name: string; slug: string };
-
-  if (!name || !slug) throw new ApiError(400, "name and slug are required");
-  if (!/^[a-z0-9-]+$/.test(slug)) throw new ApiError(400, "slug must be lowercase alphanumeric with hyphens");
+  const name = validateString(body.name, "name");
+  const slug = validateString(body.slug, "slug");
 
   const existing = await prisma.organization.findUnique({ where: { slug } });
   if (existing) throw new ApiError(409, "Organization slug already taken");

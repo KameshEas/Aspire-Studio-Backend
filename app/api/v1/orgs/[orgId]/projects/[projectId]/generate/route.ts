@@ -7,6 +7,7 @@ import {
   listAllModels,
 } from "@/lib/providers";
 import { getStorage } from "@/lib/storage";
+import { rateLimit } from "@/lib/rate-limit";
 
 /**
  * Replace {{variableName}} placeholders in a prompt template string.
@@ -35,7 +36,7 @@ function interpolatePrompt(
  *   temperature    number
  *   jobType        string   — e.g. "text", "brand-name", "hero-copy", "image"
  */
-export const POST = handler(async (req: NextRequest, ctx) => {
+export const POST = rateLimit(20, 60_000)(handler(async (req: NextRequest, ctx) => {
   const { orgId, projectId } = await ctx.params;
   const { userId } = await requireAuth(req);
   await requireOrgRole(userId, orgId, "developer");
@@ -85,6 +86,7 @@ export const POST = handler(async (req: NextRequest, ctx) => {
   }
 
   if (!promptText.trim()) throw new ApiError(400, "prompt is required (or specify templateId)");
+  if (promptText.length > 50000) throw new ApiError(400, "prompt exceeds maximum length (50000 chars)");
 
   const variables = body.variables ?? {};
   const finalPrompt = interpolatePrompt(promptText, variables);
@@ -229,4 +231,4 @@ export const POST = handler(async (req: NextRequest, ctx) => {
     });
     throw err;
   }
-});
+}));

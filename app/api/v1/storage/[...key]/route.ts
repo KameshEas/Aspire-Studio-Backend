@@ -27,9 +27,14 @@ export async function GET(
   const { key } = await ctx.params;
   const storageKey = key.join("/");
 
-  // Security: prevent path traversal
+  // Strict format: must match orgs/{id}/projects/{id}/... structure
+  if (!/^orgs\/[a-zA-Z0-9_-]+\/projects\/[a-zA-Z0-9_-]+\//.test(storageKey)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Reject any path traversal
   const normalized = path.normalize(storageKey);
-  if (normalized.startsWith("..") || normalized.includes("/../")) {
+  if (normalized.includes("..") || normalized.startsWith("/") || normalized !== storageKey.replace(/\//g, path.sep).replace(/\\/g, "/")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -43,7 +48,7 @@ export async function GET(
   const ext = storageKey.split(".").pop()?.toLowerCase() ?? "";
   const contentType = MIME_MAP[ext] ?? "application/octet-stream";
 
-  return new NextResponse(data, {
+  return new NextResponse(new Uint8Array(data), {
     status: 200,
     headers: {
       "Content-Type": contentType,

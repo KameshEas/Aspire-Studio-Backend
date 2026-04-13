@@ -40,7 +40,11 @@ export class HuggingFaceAdapter implements ProviderAdapter {
   private token: string;
 
   constructor(token?: string) {
-    this.token = token ?? process.env.HF_TOKEN ?? "";
+    const tk = token ?? process.env.HF_TOKEN;
+    if (!tk) {
+      throw new Error("HF_TOKEN not configured. Set the HF_TOKEN environment variable.");
+    }
+    this.token = tk;
   }
 
   listModels(): ModelInfo[] {

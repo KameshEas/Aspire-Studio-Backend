@@ -1,6 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Webhook } from "svix";
 import prisma from "@/lib/prisma";
+import { auditLog } from "@/lib/audit";
+
+const processedWebhooks = new Map<string, number>();
+const MAX_CACHE_SIZE = 5000;
+
+function isDuplicate(svixId: string): boolean {
+  const now = Date.now();
+  if (processedWebhooks.has(svixId)) return true;
+  if (processedWebhooks.size >= MAX_CACHE_SIZE) {
+    for (const [key, ts] of processedWebhooks) {
+      if (now - ts > 300_000) processedWebhooks.delete(key);
+    }
+  }
+  processedWebhooks.set(svixId, now);
+  return false;
+}
 
 export async function POST(req: NextRequest) {
   const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
@@ -32,6 +48,10 @@ export async function POST(req: NextRequest) {
 
   const { type, data } = event;
 
+  if (isDuplicate(svixId)) {
+    return NextResponse.json({ received: true });
+  }
+
   if (type === "user.created" || type === "user.updated") {
     const clerkId = data.id as string;
     const emailObj = (data.email_addresses as Array<{ email_address: string }> | undefined)?.[0];
@@ -45,11 +65,17 @@ export async function POST(req: NextRequest) {
       update: { email, name, avatarUrl },
       create: { clerkId, email, name, avatarUrl },
     });
+
+    await auditLog(`webhook.${type}`, { resourceType: "user", resourceId: clerkId });
   }
 
   if (type === "user.deleted") {
     const clerkId = data.id as string;
-    await prisma.user.deleteMany({ where: { clerkId } });
+    const user = await prisma.user.findUnique({ where: { clerkId } });
+    if (user) {
+      await auditLog("webhook.user.deleted", { resourceType: "user", resourceId: user.id });
+      await prisma.user.deleteMany({ where: { clerkId } });
+    }
   }
 
   return NextResponse.json({ received: true });

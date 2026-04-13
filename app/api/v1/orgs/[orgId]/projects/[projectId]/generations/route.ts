@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAuth, requireOrgRole, handler, ApiError } from "@/lib/auth";
 import { getStorage } from "@/lib/storage";
+import { validateOptionalEnum, VALID_GENERATION_STATUSES, VALID_JOB_TYPES } from "@/lib/validation";
 
 /** GET /api/v1/orgs/[orgId]/projects/[projectId]/generations — list generations (paginated) */
 export const GET = handler(async (req: NextRequest, ctx) => {
@@ -13,8 +14,8 @@ export const GET = handler(async (req: NextRequest, ctx) => {
   if (!project) throw new ApiError(404, "Project not found");
 
   const url = new URL(req.url);
-  const status = url.searchParams.get("status") ?? undefined;
-  const jobType = url.searchParams.get("jobType") ?? undefined;
+  const status = validateOptionalEnum(url.searchParams.get("status"), "status", VALID_GENERATION_STATUSES);
+  const jobType = validateOptionalEnum(url.searchParams.get("jobType"), "jobType", VALID_JOB_TYPES);
   const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "20"), 100);
   const cursor = url.searchParams.get("cursor") ?? undefined;
 
