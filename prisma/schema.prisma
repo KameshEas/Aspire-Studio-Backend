@@ -98,6 +98,7 @@ model Project {
   deployments   Deployment[]
   usageRecords  UsageRecord[]
   changeHistory ChangeHistory[]
+  temporalJobs  TemporalJob[]
 
   @@unique([orgId, slug])
   @@index([orgId])
@@ -430,4 +431,48 @@ model ModelCatalog {
 
   @@unique([provider, modelName])
   @@map("model_catalog")
+}
+
+// ─── TEMPORAL JOBS & WORKFLOW ORCHESTRATION ────────────
+
+model TemporalJob {
+  id            String   @id @default(cuid())
+  workflowId    String   @unique @map("workflow_id") // Idempotency key for dedup
+  workflowType  String   @map("workflow_type") // brand-generate, content-generate, etc.
+  tenantId      String   @map("tenant_id")
+  projectId     String   @map("project_id")
+  status        String   @default("pending") // pending, running, completed, failed, cancelled
+  input         Json     // WorkflowInput serialized
+  output        Json?    // WorkflowOutput serialized
+  error         String?
+  retryCount    Int      @default(0) @map("retry_count")
+  maxRetries    Int      @default(3) @map("max_retries")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  completedAt   DateTime? @map("completed_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([tenantId])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@map("temporal_jobs")
+}
+
+model DeadLetterQueue {
+  id               String   @id @default(cuid())
+  jobId            String   @map("job_id")
+  reason           String   // Why the job was moved to DLQ
+  lastError        String?  @map("last_error")
+  retryCount       Int      @default(0) @map("retry_count")
+  manualReview     Boolean  @default(true) @map("manual_review")
+  reviewedAt       DateTime? @map("reviewed_at")
+  resolvedAt       DateTime? @map("resolved_at")
+  resolutionNotes  String?  @map("resolution_notes")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([manualReview])
+  @@index([createdAt(sort: Desc)])
+  @@map("dead_letter_queue")
 }

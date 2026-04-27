@@ -14,12 +14,16 @@
     "@langchain/community": "^0.2.0",
     "@langchain/core": "^0.2.0",
     "@prisma/client": "^4.16.2",
+    "bull": "^4.14.2",
     "langchain": "^0.2.0",
+    "nanoid": "^5.0.7",
     "next": "16.1.6",
     "openai": "^6.33.0",
+    "redis": "^4.7.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "svix": "^1.89.0",
+    "ws": "^8.18.0",
     "zod": "^3.22.4"
   },
   "prisma": {
@@ -32,6 +36,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "prisma": "^4.16.2",
     "tsx": "^4.21.0",
     "typescript": "^5"
   }
