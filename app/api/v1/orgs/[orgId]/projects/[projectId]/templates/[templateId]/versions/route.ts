@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { requireAuth, requireOrgRole, handler, ApiError } from "@/lib/auth";
 
 /**
@@ -32,8 +33,8 @@ export const POST = handler(async (req: NextRequest, ctx) => {
       templateId,
       version: nextVersion,
       prompt: body.prompt.trim(),
-      variablesSchema: body.variablesSchema ?? undefined,
-      metadata: body.metadata ?? null,
+      variablesSchema: (body.variablesSchema as Prisma.InputJsonValue) ?? undefined,
+      metadata: (body.metadata as Prisma.InputJsonValue) ?? Prisma.JsonNull,
     },
   });
 

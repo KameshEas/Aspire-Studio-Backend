@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { requireAuth, requireOrgRole, handler, ApiError } from "@/lib/auth";
 import { validateString, validateOptionalString } from "@/lib/validation";
 
@@ -17,7 +18,7 @@ export const GET = handler(async (req: NextRequest, ctx) => {
     where: { projectId },
     include: {
       creator: { select: { id: true, name: true, email: true } },
-      _count: { select: { versions: true } },
+      _count: true,
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -70,7 +71,7 @@ export const POST = handler(async (req: NextRequest, ctx) => {
         create: {
           version: 1,
           prompt,
-          variablesSchema: body.variablesSchema ?? undefined,
+          variablesSchema: (body.variablesSchema as Prisma.InputJsonValue) ?? undefined,
         },
       },
     },

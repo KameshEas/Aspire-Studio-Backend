@@ -1,4 +1,5 @@
 import prisma from "./prisma";
+import { Prisma } from "@prisma/client";
 
 export async function auditLog(
   action: string,
@@ -18,7 +19,7 @@ export async function auditLog(
         orgId: opts.orgId ?? null,
         resourceType: opts.resourceType ?? null,
         resourceId: opts.resourceId ?? null,
-        details: opts.details ?? undefined,
+        details: (opts.details as Prisma.InputJsonValue) ?? undefined,
       },
     });
   } catch (err) {
