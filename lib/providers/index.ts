@@ -1,64 +1,81 @@
 /**
- * Provider registry — central point for getting the right provider adapter
- * based on a model ID. Add new providers here as they're integrated.
+ * Provider Registry & Factory
+ * Manages all LLM provider instances and routing
  */
-import { GroqAdapter } from "./groq";
-import { HuggingFaceAdapter } from "./huggingface";
-import type { ProviderAdapter, ModelInfo } from "./types";
 
-export type { ProviderAdapter, ModelInfo };
-export type {
-  TextGenerationRequest,
-  TextGenerationResult,
-  ImageGenerationRequest,
-  ImageGenerationResult,
-} from "./types";
+import { createOpenAIProvider } from './openai';
+import { ProviderAdapter, ModelInfo } from './types';
 
-// Singleton adapter instances
-let groqAdapter: GroqAdapter | null = null;
-let hfAdapter: HuggingFaceAdapter | null = null;
+// Singleton instances
+let openaiProvider: ProviderAdapter | null = null;
 
-function getGroq(): GroqAdapter {
-  if (!groqAdapter) groqAdapter = new GroqAdapter();
-  return groqAdapter;
-}
-
-function getHuggingFace(): HuggingFaceAdapter {
-  if (!hfAdapter) hfAdapter = new HuggingFaceAdapter();
-  return hfAdapter;
+/**
+ * Get OpenAI provider instance (singleton)
+ */
+export function getOpenAI(): ProviderAdapter {
+  if (!openaiProvider) {
+    openaiProvider = createOpenAIProvider();
+  }
+  return openaiProvider;
 }
 
 /**
- * Get provider adapter for a given model ID.
- * Falls back to Groq for unknown text models.
+ * Get provider for a specific model ID
+ * Format: "provider/model-name" e.g., "openai/gpt-4-turbo"
  */
 export function getProviderForModel(modelId: string): ProviderAdapter {
-  if (
-    modelId.startsWith("black-forest-labs/") ||
-    modelId.startsWith("stabilityai/") ||
-    modelId.startsWith("runwayml/")
-  ) {
-    return getHuggingFace();
+  const [provider] = modelId.split('/');
+
+  switch (provider) {
+    case 'openai':
+      return getOpenAI();
+    default:
+      throw new Error(`Unknown provider: ${provider}`);
   }
-  // Default to Groq for all text/LLM models
-  return getGroq();
 }
 
 /**
- * List all known models across all providers.
+ * List all available models across all providers
  */
-export function listAllModels(): ModelInfo[] {
-  return [
-    ...getGroq().listModels!(),
-    ...getHuggingFace().listModels!(),
-  ];
+export async function listAllModels(): Promise<ModelInfo[]> {
+  try {
+    const openaiModels = await getOpenAI().listModels();
+    return [...openaiModels];
+  } catch (error) {
+    console.error('Error listing models:', error);
+    return [];
+  }
 }
 
 /**
- * Determine if a model is an image model.
+ * Get detailed model info from any provider
  */
-export function isImageModel(modelId: string): boolean {
-  const all = listAllModels();
-  const found = all.find((m) => m.id === modelId);
-  return found?.capabilities.includes("image") ?? false;
+export async function getModelInfo(modelId: string): Promise<ModelInfo> {
+  const provider = getProviderForModel(modelId);
+  return provider.getModelInfo(modelId);
 }
+
+/**
+ * Calculate cost for a generation
+ */
+export async function calculateGenerationCost(
+  modelId: string,
+  tokensIn: number,
+  tokensOut: number
+): Promise<number> {
+  const modelInfo = await getModelInfo(modelId);
+  const costIn = (tokensIn / 1000) * modelInfo.costPer1kTokensIn;
+  const costOut = (tokensOut / 1000) * modelInfo.costPer1kTokensOut;
+  return costIn + costOut;
+}
+
+/**
+ * Export all providers for convenience
+ */
+export const providers = {
+  getOpenAI,
+  getProviderForModel,
+  listAllModels,
+  getModelInfo,
+  calculateGenerationCost,
+};

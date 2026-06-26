@@ -1,63 +1,59 @@
 /**
- * Shared types for AI provider adapters.
+ * Provider abstraction types
+ * Unified interface for all LLM providers
  */
 
-export interface TextGenerationRequest {
-  model: string;
-  prompt?: string;
-  messages?: { role: "system" | "user" | "assistant"; content: string }[];
+export interface GenerateTextRequest {
+  prompt: string;
+  systemPrompt?: string;
   maxTokens?: number;
   temperature?: number;
   topP?: number;
-  systemPrompt?: string;
 }
 
-export interface TextGenerationResult {
+export interface GenerateTextResponse {
   text: string;
-  model: string;
-  provider: string;
   usage: {
     tokensIn: number;
     tokensOut: number;
-    /** Estimated cost in USD */
-    costUsd: number;
   };
-  latencyMs: number;
-}
-
-export interface ImageGenerationRequest {
-  model: string;
-  prompt: string;
-  width?: number;
-  height?: number;
-  numImages?: number;
-}
-
-export interface ImageGenerationResult {
-  /** Base64-encoded PNG/JPEG */
-  imageBase64: string;
-  mimeType: string;
   model: string;
   provider: string;
-  latencyMs: number;
+  finishReason?: 'stop' | 'length' | 'error' | 'unknown';
+}
+
+export interface GenerateImageRequest {
+  prompt: string;
+  size?: 'small' | 'medium' | 'large';
+  quantity?: number;
+}
+
+export interface GenerateImageResponse {
+  images: Array<{
+    url: string;
+    base64?: string;
+  }>;
+  usage: {
+    imageCount: number;
+  };
+  model: string;
+  provider: string;
 }
 
 export interface ModelInfo {
   id: string;
   name: string;
   provider: string;
-  capabilities: ("text" | "image" | "embedding")[];
+  capabilities: ('text-generation' | 'image-generation' | 'embeddings')[];
   contextWindow: number;
-  /** Cost per 1M input tokens in USD */
-  costInputPer1M: number;
-  /** Cost per 1M output tokens in USD */
-  costOutputPer1M: number;
-  description?: string;
+  costPer1kTokensIn: number;
+  costPer1kTokensOut: number;
+  deprecated?: boolean;
 }
 
 export interface ProviderAdapter {
-  readonly name: string;
-  generateText(req: TextGenerationRequest): Promise<TextGenerationResult>;
-  generateImage?(req: ImageGenerationRequest): Promise<ImageGenerationResult>;
-  listModels?(): ModelInfo[];
+  generateText(request: GenerateTextRequest): Promise<GenerateTextResponse>;
+  generateImage(request: GenerateImageRequest): Promise<GenerateImageResponse>;
+  listModels(): Promise<ModelInfo[]>;
+  getModelInfo(modelId: string): Promise<ModelInfo>;
 }

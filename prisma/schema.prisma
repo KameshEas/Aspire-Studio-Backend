@@ -216,21 +216,28 @@ model Generation {
 // ─── ARTIFACTS ─────────────────────────────────────────
 
 model Artifact {
-  id           String   @id @default(cuid())
-  generationId String   @map("generation_id")
-  projectId    String   @map("project_id")
-  orgId        String   @map("org_id")
-  type         String   // text, image, html, zip, embedding
-  storageUrl   String   @map("storage_url")
-  fileName     String?  @map("file_name")
-  sizeBytes    BigInt?  @map("size_bytes")
-  metadata     Json?
-  version      Int      @default(1)
-  createdAt    DateTime @default(now()) @map("created_at")
+  id                String   @id @default(cuid())
+  generationId      String   @map("generation_id")
+  projectId         String   @map("project_id")
+  orgId             String   @map("org_id")
+  type              String   // text, image, html, zip, embedding
+  storageUrl        String   @map("storage_url")
+  fileName          String?  @map("file_name")
+  sizeBytes         BigInt?  @map("size_bytes")
+  metadata          Json?
+  version           Int      @default(1)
+  status            String   @default("draft") // draft, approved, archived
+  parentArtifactId  String?  @map("parent_artifact_id")
+  rating            Int?     // 1-5 user rating
+  tags              String[] @default([])
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   generation    Generation     @relation(fields: [generationId], references: [id], onDelete: Cascade)
   project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   org           Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  parent        Artifact?      @relation("ArtifactParent", fields: [parentArtifactId], references: [id])
+  derivatives   Artifact[]     @relation("ArtifactParent")
   assetCurrent  Asset[]        @relation("AssetCurrentArtifact")
   assetVersions AssetVersion[]
   deployments   Deployment[]
@@ -239,6 +246,8 @@ model Artifact {
   @@index([generationId])
   @@index([type])
   @@index([orgId])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
   @@map("artifacts")
 }
 
@@ -477,4 +486,14 @@ model DeadLetterQueue {
   jobId            String   @map("job_id")
   reason           String   // Why the job was moved to DLQ
   lastError        String?  @map("last_error")
-  retryCount       Int      @default(0) @map("re
+  retryCount       Int      @default(0) @map("retry_count")
+  manualReview     Boolean  @default(true) @map("manual_review")
+  reviewedAt       DateTime? @map("reviewed_at")
+  resolvedAt       DateTime? @map("resolved_at")
+  resolutionNotes  String?  @map("resolution_notes")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([manualReview])
+  @@index([createdAt(sort: Desc)])
+  @@map("dead_letter_queue")
+}
