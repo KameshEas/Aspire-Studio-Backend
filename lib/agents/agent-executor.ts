@@ -136,9 +136,9 @@ export abstract class BaseAgentExecutor {
     if (!tool) {
       throw new Error(`Tool not found: ${toolName}`);
     }
-    // LangChain DynamicTool's func accepts string input
+    // LangChain tools are called with call() method
     const inputStr = typeof toolInput === "string" ? toolInput : JSON.stringify(toolInput);
-    const result = await (tool as any).func(inputStr);
+    const result = await tool.call(inputStr);
     return typeof result === "string" ? result : JSON.stringify(result);
   }
 

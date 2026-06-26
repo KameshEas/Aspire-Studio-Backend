@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '../../../../../../lib/auth';
 import { prisma } from '../../../../../../lib/prisma';
-import { submitWorkflow } from '../../../../../../lib/workflow/engine';
+import { submitWorkflow, WorkflowType } from '../../../../../../lib/workflow/engine';
 
 export async function GET(
   request: NextRequest,
@@ -75,7 +75,7 @@ export async function PATCH(
     }
 
     const { dlqId } = params;
-    const body: any = await request.json();
+    const body: { action?: string; notes?: string } = await request.json();
     const action = body.action;
 
     const dlqEntry = await prisma.deadLetterQueue.findUnique({
@@ -115,11 +115,11 @@ export async function PATCH(
 
       // Resubmit workflow
       try {
-        const { jobId: newJobId } = await submitWorkflow(job.workflowType as any, {
+        const { jobId: newJobId } = await submitWorkflow(job.workflowType as WorkflowType, {
           idempotencyKey: `${job.workflowId}-retry-${Date.now()}`,
           tenantId: job.tenantId,
           projectId: job.projectId,
-          payload: job.input as any,
+          payload: (job.input as Record<string, any>) || {},
           options: {},
         });
 
@@ -146,8 +146,9 @@ export async function PATCH(
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
-  } catch (error) {
-    console.error('[API] DLQ update error:', error);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[API] DLQ update error:', errorMessage);
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : 'Internal server error',

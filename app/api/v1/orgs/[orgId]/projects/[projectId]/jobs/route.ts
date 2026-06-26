@@ -5,9 +5,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '../../../../../lib/auth';
-import { submitWorkflow, listWorkflowJobs, WorkflowType } from '../../../../../lib/workflow/engine';
-import { prisma } from '../../../../../lib/prisma';
+import { requireAuth } from '@/lib/auth';
+import { submitWorkflow, WorkflowType } from '@/lib/workflow/engine';
+import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 
 // Validation schema for job submission
@@ -138,7 +138,7 @@ export async function GET(
     });
 
     return NextResponse.json({
-      jobs: jobs.map((job) => ({
+      jobs: jobs.map((job: typeof jobs[0]) => ({
         id: job.id,
         workflowType: job.workflowType,
         status: job.status,

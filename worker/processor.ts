@@ -3,7 +3,7 @@
  * Processes jobs from Bull queue and executes corresponding workflows
  */
 
-import { Job } from 'bull';
+import { Job, Queue } from 'bull';
 import { WorkflowType, updateWorkflowResults, markWorkflowFailed } from '../lib/workflow/engine';
 import { WorkflowInput, WorkflowOutput } from '../lib/workflow/engine';
 import { brandGenerateWorkflow } from './workflows/brandGenerate';
@@ -79,7 +79,7 @@ export async function processJob(job: Job): Promise<WorkflowOutput> {
 /**
  * Register job processor for all task queues
  */
-export async function registerJobProcessors(queues: Map<string, any>): Promise<void> {
+export async function registerJobProcessors(queues: Map<string, Queue>): Promise<void> {
   for (const [taskQueueName, queue] of queues.entries()) {
     console.log(`[Worker] Registering processor for task queue: ${taskQueueName}`);
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { orchestrationManager, WorkflowExecution } from "@/lib/orchestration";
+import { orchestrationManager } from "@/lib/orchestration";
 import { CoordinatorInput } from "@/lib/agents";
 
 /**
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
  * GET /api/v1/workflows/agents
  * Get available agents
  */
-export async function GET_AGENTS(request: NextRequest) {
+export async function GET_AGENTS(_request: NextRequest) {
   try {
     const agents = orchestrationManager.getAvailableAgents();
     return NextResponse.json({ agents });

@@ -2,7 +2,7 @@
  * Activity Definitions - Types and interfaces for workflow activities
  */
 
-export type ActivityResult<T = any> = {
+export type ActivityResult<T = Record<string, any>> = {
   success: boolean;
   data?: T;
   error?: string;
@@ -35,7 +35,7 @@ export type ArtifactStorageOptions = {
 // Activity task definitions
 export interface ActivityTask {
   type: string;
-  payload: any;
+  payload: Record<string, any>;
   taskQueue?: string;
   retryPolicy?: {
     maxAttempts: number;
@@ -99,7 +99,7 @@ export const activities = {
     timeout: 60000,
   }),
 
-  assembleHTML: (spec: any, content: any[]): ActivityTask => ({
+  assembleHTML: (spec: Record<string, any>, content: Array<Record<string, any>>): ActivityTask => ({
     type: 'assemble-html',
     payload: { spec, content },
     taskQueue: 'io-worker',
@@ -112,7 +112,7 @@ export const activities = {
   }),
 
   // Validation
-  validateInput: (input: any): ActivityTask => ({
+  validateInput: (input: Record<string, any>): ActivityTask => ({
     type: 'validate-input',
     payload: input,
     taskQueue: 'light-worker',
@@ -120,7 +120,7 @@ export const activities = {
   }),
 
   // Template processing
-  templatePrompt: (template: any, variables: any): ActivityTask => ({
+  templatePrompt: (template: Record<string, any>, variables: Record<string, any>): ActivityTask => ({
     type: 'template-prompt',
     payload: { template, variables },
     taskQueue: 'light-worker',

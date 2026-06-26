@@ -5,7 +5,7 @@ import { orchestrationManager } from "@/lib/orchestration";
  * GET /api/v1/workflows/agents
  * Get list of available agents
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const agents = orchestrationManager.getAvailableAgents();
 

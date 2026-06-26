@@ -5,7 +5,7 @@
 
 import * as dotenv from 'dotenv';
 import path from 'path';
-import { getAllQueues, submitWorkflow } from '../lib/workflow/engine';
+import { getAllQueues } from '../lib/workflow/engine';
 import { registerJobProcessors } from './processor';
 
 // Load environment variables

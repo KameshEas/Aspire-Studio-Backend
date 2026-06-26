@@ -8,6 +8,8 @@ import { AgentExecutionResult, CostTracker } from "./agent-executor";
 
 export type TaskType = "brand" | "ui" | "content" | "code" | "seo" | "deployment" | "multi-step";
 
+export type AgentType = BrandAgent | UIAgent | ContentAgent | CodeAgent | SEOAgent | DeploymentAgent | null;
+
 export interface CoordinatorInput {
   taskType: TaskType;
   agentInputs: Record<string, unknown>;
@@ -29,7 +31,7 @@ export interface CoordinatorResult {
  * Orchestrates multi-step workflows based on task dependencies
  */
 export class CoordinatorAgent {
-  private agents: Record<TaskType, any> = {
+  private agents: Record<TaskType, AgentType> = {
     brand: new BrandAgent(),
     ui: new UIAgent(),
     content: new ContentAgent(),

@@ -8,7 +8,7 @@ export const brandGenerationTool = new DynamicTool({
   name: "generate_brand",
   description:
     "Generate brand assets including name, tagline, color palette (hex codes), logo description, and brand guidelines. Input: JSON with industry, targetAudience, tone, keywords",
-  func: async (input: string) => {
+  func: async (_input: string) => {
     return JSON.stringify({
       brandName: "Generated Brand",
       tagline: "A generated tagline",
@@ -31,7 +31,7 @@ export const uiGenerationTool = new DynamicTool({
   name: "generate_ui",
   description:
     "Generate UI/UX layouts, component specifications, mockups, and HTML/CSS code for web pages. Input: JSON with pageType, components, colorScheme",
-  func: async (input: string) => {
+  func: async (_input: string) => {
     return JSON.stringify({
       layout: "Mobile-first responsive layout",
       components: [{ name: "hero", spec: "Full-width hero section" }],
@@ -48,7 +48,7 @@ export const contentGenerationTool = new DynamicTool({
   name: "generate_content",
   description:
     "Generate marketing content: hero copy, CTAs, SEO metadata, email sequences, and social media variants. Input: JSON with productName, productDescription, targetAudience, tone",
-  func: async (input: string) => {
+  func: async (_input: string) => {
     return JSON.stringify({
       heroCopy: "Compelling headline",
       cta: "Call-to-action button text",
@@ -67,7 +67,7 @@ export const codeGenerationTool = new DynamicTool({
   name: "generate_code",
   description:
     "Generate React components, TypeScript types, unit tests, and ensure code passes linting. Input: JSON with componentName, functionality, props",
-  func: async (input: string) => {
+  func: async (_input: string) => {
     return JSON.stringify({
       component: "export const Component = (props) => { /* code */ }",
       types: "export interface ComponentProps { /* types */ }",
@@ -85,7 +85,7 @@ export const seoAnalyticsTool = new DynamicTool({
   name: "analyze_seo",
   description:
     "Analyze SEO strategy: competitors, keywords, meta descriptions, link structure, and recommendations. Input: JSON with targetKeywords, competitorUrls, contentTopic",
-  func: async (input: string) => {
+  func: async (_input: string) => {
     return JSON.stringify({
       keywordStrategy: { primary: "main keyword", secondary: ["related", "keywords"] },
       metaDescription: "Optimized meta description",
@@ -104,7 +104,7 @@ export const deploymentTool = new DynamicTool({
   name: "deploy_project",
   description:
     "Deploy project: GitHub repository setup, Vercel deployment, DNS configuration, SSL certificates. Input: JSON with projectName, repositoryUrl, environment, customDomain",
-  func: async (input: string) => {
+  func: async (_input: string) => {
     return JSON.stringify({
       githubStatus: "Repository created",
       deploymentUrl: "https://project.vercel.app",

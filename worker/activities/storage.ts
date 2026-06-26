@@ -19,10 +19,14 @@ export async function storeArtifactActivity(
 
     const storagePath = `orgs/${options.projectId.split('-')[0]}/projects/${options.projectId}/artifacts/${options.generationId}/${fileName}`;
 
+    // Convert content to Buffer if needed
+    const contentBuffer = typeof options.content === 'string' 
+      ? Buffer.from(options.content) 
+      : options.content;
+
     // Upload to storage
-    const uploadUrl = await storage.upload(storagePath, options.content, {
-      contentType: options.mimeType,
-    });
+    const uploadResult = await storage.upload(storagePath, contentBuffer, options.mimeType);
+    const uploadUrl = await storage.getSignedUrl(uploadResult.storageKey);
 
     // Create artifact record in DB
     const artifact = await prisma.artifact.create({
@@ -33,11 +37,7 @@ export async function storeArtifactActivity(
         type: mimeTypeToArtifactType(options.mimeType),
         storageUrl: uploadUrl,
         fileName,
-        sizeBytes: BigInt(
-          typeof options.content === 'string'
-            ? options.content.length
-            : options.content.length
-        ),
+        sizeBytes: BigInt(uploadResult.sizeBytes),
       },
     });
 
@@ -62,7 +62,7 @@ export async function storeArtifactActivity(
  * Assemble PDF Activity (Stub)
  */
 export async function assemblePdfActivity(
-  artifactIds: string[]
+  _artifactIds: string[]
 ): Promise<ActivityResult> {
   // Phase 2: Implement PDF assembly from multiple artifacts
   return {
@@ -75,8 +75,8 @@ export async function assemblePdfActivity(
  * Assemble HTML Activity
  */
 export async function assembleHtmlActivity(
-  spec: any,
-  content: any[]
+  _spec: Record<string, any>,
+  _content: Array<Record<string, any>>
 ): Promise<ActivityResult> {
   try {
     // Phase 2: Implement HTML assembly from UI spec and content

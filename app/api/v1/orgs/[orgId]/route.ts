@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { requireAuth, requireOrgRole, handler, ApiError } from "@/lib/auth";
+import { requireAuth, requireOrgRole, handler } from "@/lib/auth";
 
 /** GET /api/v1/orgs/[orgId] — org detail */
 export const GET = handler(async (req: NextRequest, ctx) => {

@@ -77,3 +77,6 @@ export function getStorage(): StorageAdapter {
 
 /** Expose LocalStorageAdapter for the file-serve route */
 export { LocalStorageAdapter };
+
+// Singleton instance for convenience
+export const storage = getStorage();

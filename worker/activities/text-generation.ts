@@ -3,9 +3,17 @@
  * Handles text generation requests via Groq LLM provider
  */
 
-import { groq } from '../providers/groq';
-import { prisma } from '../prisma';
-import { ActivityResult, TextGenerationOptions } from './types';
+import { groq } from '../../lib/providers/groq';
+import { prisma } from '../../lib/prisma';
+import type { ActivityResult } from '../../lib/workflow/activities';
+
+export interface TextGenerationOptions {
+  prompt: string;
+  model?: string;
+  maxTokens?: number;
+  temperature?: number;
+  systemPrompt?: string;
+}
 
 export async function generateTextActivity(
   options: TextGenerationOptions
@@ -24,7 +32,7 @@ export async function generateTextActivity(
     return {
       success: true,
       data: {
-        artifactId: result.generationId || '',
+        artifactId: `text-${Date.now()}`,
         text: result.text,
       },
       duration: Date.now() - startTime,
@@ -39,20 +47,10 @@ export async function generateTextActivity(
 }
 
 /**
- * Image Generation Activity Handler (Stub for Phase 2)
+ * Note: Image generation activity has been moved to image-generation.ts
+ * This re-export maintains backward compatibility
  */
-export async function generateImageActivity(options: {
-  prompt: string;
-  model?: string;
-  width?: number;
-  height?: number;
-}): Promise<ActivityResult> {
-  // Phase 2: Implement with HuggingFace GPU worker
-  return {
-    success: false,
-    error: 'Image generation deferred to Phase 2',
-  };
-}
+export { generateImageActivity } from './image-generation';
 
 /**
  * Validate Input Activity
@@ -60,7 +58,7 @@ export async function generateImageActivity(options: {
 export async function validateInputActivity(input: {
   tenantId: string;
   projectId: string;
-  payload: any;
+  payload: Record<string, any>;
 }): Promise<ActivityResult> {
   try {
     if (!input.tenantId || !input.projectId) {

@@ -15,7 +15,7 @@ export async function brandGenerateWorkflow(
   input: WorkflowInput
 ): Promise<WorkflowOutput> {
   const artifacts: WorkflowOutput['artifacts'] = [];
-  const errors: WorkflowOutput['artifacts'] = [];
+  const errors: WorkflowOutput['errors'] = [];
   const startTime = Date.now();
 
   try {
@@ -57,7 +57,7 @@ export async function brandGenerateWorkflow(
         activity: 'generateBrandName',
         message: nameResult.error || 'Unknown error',
         timestamp: new Date().toISOString(),
-      } as any);
+      } as { activity: string; message: string; timestamp: string });
     } else if (nameResult.data) {
       // 4. Store brand name artifact
       const nameArtifact = await storeArtifactActivity({

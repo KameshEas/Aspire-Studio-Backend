@@ -105,3 +105,6 @@ export class GroqAdapter implements ProviderAdapter {
     };
   }
 }
+
+// Singleton instance for convenience
+export const groq = new GroqAdapter();

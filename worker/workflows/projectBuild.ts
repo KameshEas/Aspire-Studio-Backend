@@ -14,7 +14,7 @@ export async function projectBuildWorkflow(
   input: WorkflowInput
 ): Promise<WorkflowOutput> {
   const artifacts: WorkflowOutput['artifacts'] = [];
-  const errors: WorkflowOutput['artifacts'] = [];
+  const errors: WorkflowOutput['errors'] = [];
   const startTime = Date.now();
 
   try {

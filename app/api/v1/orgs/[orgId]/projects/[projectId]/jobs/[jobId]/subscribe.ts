@@ -6,8 +6,7 @@
 
 import { WebSocketServer, WebSocket } from 'ws';
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getWorkflowStatus } from '../../../../../../lib/workflow/engine';
-import { requireAuth } from '../../../../../../lib/auth';
+import { getWorkflowStatus } from '@/lib/workflow/engine';
 
 type NextApiResponseWithSocket = NextApiResponse & {
   socket: any & {
@@ -123,7 +122,7 @@ export default async function handler(
           console.log(`[WebSocket] Client disconnected for job ${jobId}`);
         });
 
-        ws.on('error', (error) => {
+        ws.on('error', (error: Error) => {
           console.error('[WebSocket] Error:', error);
         });
       });
@@ -131,7 +130,7 @@ export default async function handler(
       // Handle upgrade request
       res.socket.server.on('upgrade', (req: any, socket: any, head: any) => {
         if (req.url?.includes('/jobs/') && req.url?.includes('/subscribe')) {
-          wss.handleUpgrade(req, socket, head, (ws) => {
+          wss.handleUpgrade(req, socket, head, (ws: WebSocket) => {
             wss.emit('connection', ws, req);
           });
         }

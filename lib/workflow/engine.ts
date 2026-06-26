@@ -4,7 +4,7 @@
  */
 
 import Queue, { Job } from 'bull';
-import { v4 as uuidv4 } from 'nanoid';
+import { nanoid } from 'nanoid';
 import { prisma } from '../prisma';
 
 export type WorkflowType = 
@@ -16,18 +16,21 @@ export type WorkflowType =
 
 export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
-export interface WorkflowInput {
+export type WorkflowInput = {
   idempotencyKey: string;
   tenantId: string;
   projectId: string;
+  generationId?: string;
   payload: Record<string, any>;
   options?: Record<string, any>;
-}
+  [key: string]: any;
+};
 
-export interface WorkflowOutput {
+export type WorkflowOutput = {
   artifacts: Array<{
     id: string;
-    type: 'text' | 'image' | 'pdf' | 'html' | 'code';
+    type?: string;
+    name?: string;
     url?: string;
     mimeType?: string;
     metadata?: Record<string, any>;
@@ -41,17 +44,19 @@ export interface WorkflowOutput {
     totalDurationMs: number;
     startedAt: string;
     completedAt: string;
+    [key: string]: any;
   };
-}
+  [key: string]: any;
+};
 
-export interface TemporalJobRecord {
+export type TemporalJobRecord = {
   id: string;
   workflowId: string;
-  workflowType: WorkflowType;
+  workflowType: WorkflowType | string;
   tenantId: string;
   projectId: string;
   status: JobStatus;
-  input: WorkflowInput;
+  input: WorkflowInput | Record<string, any>;
   output?: WorkflowOutput;
   error?: string;
   retryCount: number;
@@ -59,7 +64,7 @@ export interface TemporalJobRecord {
   createdAt: Date;
   updatedAt: Date;
   completedAt?: Date;
-}
+};
 
 // Queue instances per task queue
 const queues: Map<string, Queue.Queue> = new Map();
@@ -88,11 +93,11 @@ export async function submitWorkflow(
   workflowType: WorkflowType,
   input: WorkflowInput
 ): Promise<{ jobId: string; executionId: string }> {
-  const jobId = uuidv4();
+  const jobId = nanoid();
   const workflowId = input.idempotencyKey; // Use idempotency key as dedup
 
   // Create record in database
-  const jobRecord = await prisma.temporalJob.create({
+  await prisma.temporalJob.create({
     data: {
       id: jobId,
       workflowId,
@@ -100,7 +105,7 @@ export async function submitWorkflow(
       tenantId: input.tenantId,
       projectId: input.projectId,
       status: 'pending',
-      input,
+      input: input as Record<string, any>,
       retryCount: 0,
       maxRetries: 3,
     },
@@ -139,10 +144,11 @@ export async function submitWorkflow(
 /**
  * Get workflow job status
  */
-export async function getWorkflowStatus(jobId: string): Promise<TemporalJobRecord | null> {
-  return await prisma.temporalJob.findUnique({
+export async function getWorkflowStatus(jobId: string): Promise<(TemporalJobRecord | null)> {
+  const job = await prisma.temporalJob.findUnique({
     where: { id: jobId },
   });
+  return job ? (job as TemporalJobRecord) : null;
 }
 
 /**
@@ -165,7 +171,7 @@ export async function listWorkflowJobs(
     }),
   ]);
 
-  return { jobs, total };
+  return { jobs: jobs as TemporalJobRecord[], total };
 }
 
 /**
@@ -178,7 +184,7 @@ export async function cancelWorkflow(jobId: string): Promise<boolean> {
 
   if (!job) return false;
 
-  const taskQueue = getTaskQueueForWorkflow(job.workflowType);
+  const taskQueue = getTaskQueueForWorkflow(job.workflowType as WorkflowType);
   const queue = getQueue(taskQueue);
 
   // Remove from queue if pending
@@ -203,14 +209,15 @@ export async function updateWorkflowResults(
   jobId: string,
   output: WorkflowOutput
 ): Promise<TemporalJobRecord> {
-  return await prisma.temporalJob.update({
+  const job = await prisma.temporalJob.update({
     where: { id: jobId },
     data: {
       status: 'completed',
-      output,
+      output: output as Record<string, any>,
       completedAt: new Date(),
     },
   });
+  return job as TemporalJobRecord;
 }
 
 /**
@@ -241,7 +248,7 @@ export async function markWorkflowFailed(
     });
   }
 
-  return job;
+  return job as TemporalJobRecord;
 }
 
 /**
