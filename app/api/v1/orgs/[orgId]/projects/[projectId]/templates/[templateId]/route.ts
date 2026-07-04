@@ -1,85 +1,123 @@
-import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
-import { requireAuth, requireOrgRole, handler, ApiError } from "@/lib/auth";
+import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
+import { requireAuth, requireOrgRole, handler, ApiError } from '@/lib/auth';
+import { z } from 'zod';
 
-/** GET /api/v1/orgs/[orgId]/projects/[projectId]/templates/[templateId] — template detail with versions */
+// ─── Validation Schemas ──────────────────────────────────
+const UpdateTemplateSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  description: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+// ─── GET: Fetch Single Template ──────────────────────────
 export const GET = handler(async (req: NextRequest, ctx) => {
   const { orgId, projectId, templateId } = await ctx.params;
   const { userId } = await requireAuth(req);
   await requireOrgRole(userId, orgId);
 
   const template = await prisma.template.findFirst({
-    where: { id: templateId, projectId, project: { orgId } },
+    where: { id: templateId, projectId },
     include: {
-      creator: { select: { id: true, name: true, email: true } },
-      versions: { orderBy: { version: "desc" } },
+      versions: {
+        orderBy: { version: 'desc' },
+      },
+      _count: { select: { generations: true } },
     },
   });
 
-  if (!template) throw new ApiError(404, "Template not found");
+  if (!template) throw new ApiError(404, 'Template not found');
 
   return NextResponse.json({
     id: template.id,
     name: template.name,
     description: template.description,
-    createdBy: template.creator
-      ? { id: template.creator.id, name: template.creator.name, email: template.creator.email }
-      : null,
+    tags: template.tags,
+    isArchived: template.isArchived,
+    currentVersionId: template.currentVersionId,
     versions: template.versions.map((v) => ({
       id: v.id,
       version: v.version,
       prompt: v.prompt,
+      systemPrompt: v.systemPrompt,
       variablesSchema: v.variablesSchema,
-      metadata: v.metadata,
+      testData: v.testData,
+      isActive: v.isActive,
+      generationCount: v.generationCount,
       createdAt: v.createdAt,
+      updatedAt: v.updatedAt,
     })),
-    latestVersion: template.versions[0] ?? null,
+    generationCount: template._count.generations,
     createdAt: template.createdAt,
     updatedAt: template.updatedAt,
   });
 });
 
-/** PATCH /api/v1/orgs/[orgId]/projects/[projectId]/templates/[templateId] — update name/description */
+// ─── PATCH: Update Template Metadata ─────────────────────
 export const PATCH = handler(async (req: NextRequest, ctx) => {
   const { orgId, projectId, templateId } = await ctx.params;
   const { userId } = await requireAuth(req);
-  await requireOrgRole(userId, orgId, "developer");
-
-  const body = await req.json() as { name?: string; description?: string };
+  await requireOrgRole(userId, orgId, ['owner', 'admin', 'developer']);
 
   const template = await prisma.template.findFirst({
-    where: { id: templateId, projectId, project: { orgId } },
-  });
-  if (!template) throw new ApiError(404, "Template not found");
-
-  const updated = await prisma.template.update({
-    where: { id: templateId },
-    data: {
-      ...(body.name !== undefined && { name: body.name.trim() }),
-      ...(body.description !== undefined && { description: body.description.trim() || null }),
-    },
+    where: { id: templateId, projectId },
   });
 
-  return NextResponse.json({
-    id: updated.id,
-    name: updated.name,
-    description: updated.description,
-    updatedAt: updated.updatedAt,
-  });
+  if (!template) throw new ApiError(404, 'Template not found');
+
+  const body = await req.json();
+  const validatedData = UpdateTemplateSchema.parse(body);
+
+  try {
+    const updated = await prisma.template.update({
+      where: { id: templateId },
+      data: {
+        ...(validatedData.name && { name: validatedData.name }),
+        ...(validatedData.description !== undefined && {
+          description: validatedData.description,
+        }),
+        ...(validatedData.tags && { tags: validatedData.tags }),
+      },
+      include: {
+        versions: {
+          where: { isActive: true },
+          take: 1,
+        },
+      },
+    });
+
+    return NextResponse.json({
+      id: updated.id,
+      name: updated.name,
+      description: updated.description,
+      tags: updated.tags,
+      currentVersion: updated.versions[0] || null,
+      updatedAt: updated.updatedAt,
+    });
+  } catch (error: any) {
+    if (error.code === 'P2002') {
+      throw new ApiError(409, 'Template name already exists in this project');
+    }
+    throw error;
+  }
 });
 
-/** DELETE /api/v1/orgs/[orgId]/projects/[projectId]/templates/[templateId] */
+// ─── DELETE: Archive Template ────────────────────────────
 export const DELETE = handler(async (req: NextRequest, ctx) => {
   const { orgId, projectId, templateId } = await ctx.params;
   const { userId } = await requireAuth(req);
-  await requireOrgRole(userId, orgId, "admin");
+  await requireOrgRole(userId, orgId, ['owner', 'admin']);
 
   const template = await prisma.template.findFirst({
-    where: { id: templateId, projectId, project: { orgId } },
+    where: { id: templateId, projectId },
   });
-  if (!template) throw new ApiError(404, "Template not found");
 
-  await prisma.template.delete({ where: { id: templateId } });
+  if (!template) throw new ApiError(404, 'Template not found');
 
-  return NextResponse.json({ deleted: true });
+  await prisma.template.update({
+    where: { id: templateId },
+    data: { isArchived: true },
+  });
+
+  return new NextResponse('', { status: 204 });
 });
