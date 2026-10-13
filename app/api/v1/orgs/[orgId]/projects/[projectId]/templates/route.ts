@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { requireAuth, requireOrgRole } from '@/lib/auth';
+import { requireAuth, requireOrgRole, requireProject, handler } from '@/lib/auth';
 import { validateVariablesSchema, extractVariablesFromPrompt } from '@/lib/templates';
 import { z } from 'zod';
 
@@ -15,20 +15,12 @@ const CreateTemplateSchema = z.object({
 });
 
 // ─── GET: List Templates ────────────────────────────────────
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ orgId: string; projectId: string }> }
-) {
+export const GET = handler(async (req: NextRequest, ctx) => {
   const auth = await requireAuth(req);
-  if (!auth) return new NextResponse('Unauthorized', { status: 401 });
+  const { orgId, projectId } = await ctx.params;
 
-  const { orgId, projectId } = await params;
-
-  // Check org membership
-  const orgMember = await prisma.organizationMember.findUnique({
-    where: { orgId_userId: { orgId, userId: auth.userId } },
-  });
-  if (!orgMember) return new NextResponse('Forbidden', { status: 403 });
+  await requireOrgRole(auth.userId, orgId);
+  await requireProject(orgId, projectId);
 
   const { searchParams } = new URL(req.url);
   const limit = Math.min(Number(searchParams.get('limit') || 50), 100);
@@ -45,11 +37,8 @@ export async function GET(
       },
       include: {
         versions: {
-          where: { isActive: true },
           orderBy: { version: 'desc' },
-          take: 1,
         },
-        _count: { select: { generations: true } },
       },
       orderBy: { updatedAt: 'desc' },
       take: limit,
@@ -70,8 +59,8 @@ export async function GET(
         name: t.name,
         description: t.description,
         tags: t.tags,
-        currentVersion: t.versions[0] || null,
-        generationCount: t._count.generations,
+        currentVersion: t.versions.find((v) => v.isActive) ?? null,
+        generationCount: t.versions.reduce((sum, v) => sum + v.generationCount, 0),
         createdAt: t.createdAt,
         updatedAt: t.updatedAt,
       })),
@@ -86,24 +75,16 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+});
 
 // ─── POST: Create Template ──────────────────────────────────
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ orgId: string; projectId: string }> }
-) {
+export const POST = handler(async (req: NextRequest, ctx) => {
   const auth = await requireAuth(req);
-  if (!auth) return new NextResponse('Unauthorized', { status: 401 });
-
-  const { orgId, projectId } = await params;
+  const { orgId, projectId } = await ctx.params;
 
   // Require developer+ role
-  try {
-    await requireOrgRole(orgId, auth.userId, ['owner', 'admin', 'developer']);
-  } catch {
-    return new NextResponse('Insufficient permissions', { status: 403 });
-  }
+  await requireOrgRole(auth.userId, orgId, ['owner', 'admin', 'developer']);
+  await requireProject(orgId, projectId);
 
   try {
     const body = await req.json();
@@ -166,4 +147,4 @@ export async function POST(
       { status: 500 }
     );
   }
-}
+});

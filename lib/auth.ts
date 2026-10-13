@@ -75,22 +75,49 @@ const ROLE_RANK: Record<string, number> = {
 export async function requireOrgRole(
   userId: string,
   orgId: string,
-  minRole: string = "viewer"
+  minRole: string | string[] = "viewer"
 ): Promise<void> {
   const member = await prisma.organizationMember.findUnique({
     where: { orgId_userId: { orgId, userId } },
   });
 
-  if (!member || (ROLE_RANK[member.role] ?? -1) < (ROLE_RANK[minRole] ?? 0)) {
+  // An array means "any of these roles": the lowest-ranked one sets the bar.
+  // Unknown role names rank above owner so a typo denies access instead of granting it.
+  const roles = Array.isArray(minRole) ? minRole : [minRole];
+  const required = Math.min(...roles.map((r) => ROLE_RANK[r] ?? Number.MAX_SAFE_INTEGER));
+
+  if (!member || (ROLE_RANK[member.role] ?? -1) < required) {
     throw new ApiError(403, "Insufficient permissions");
   }
+}
+
+/**
+ * Verify the project exists and belongs to the given org.
+ * Without this, a member of org A could address org B's project by mixing IDs.
+ */
+export async function requireProject(orgId: string, projectId: string) {
+  const project = await prisma.project.findFirst({ where: { id: projectId, orgId } });
+  if (!project) throw new ApiError(404, "Project not found");
+  return project;
+}
+
+/**
+ * Require a platform-level admin (User.role === "admin"), distinct from org roles.
+ */
+export async function requirePlatformAdmin(userId: string): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+  if (user?.role !== "admin") throw new ApiError(403, "Platform admin access required");
 }
 
 /**
  * Lightweight API error class for consistent JSON error responses.
  */
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+    public details?: unknown
+  ) {
     super(message);
   }
 }
@@ -111,7 +138,10 @@ export function handler(
     } catch (err) {
       if (err instanceof ApiError) {
         return applyCorsHeaders(
-          NextResponse.json({ error: err.message }, { status: err.status })
+          NextResponse.json(
+            { error: err.message, ...(err.details !== undefined && { details: err.details }) },
+            { status: err.status }
+          )
         );
       }
       console.error("[API]", err);

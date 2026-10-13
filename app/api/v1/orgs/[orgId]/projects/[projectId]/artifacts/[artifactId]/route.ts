@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { requireAuth, requireOrgRole, handler, ApiError } from '@/lib/auth';
+import { requireAuth, requireOrgRole, requireProject, handler, ApiError } from '@/lib/auth';
 import { z } from 'zod';
 
 // ─── Validation Schema ───────────────────────────────────
@@ -61,6 +61,7 @@ export const PATCH = handler(async (req: NextRequest, ctx) => {
   const { orgId, projectId, artifactId } = await ctx.params;
   const { userId } = await requireAuth(req);
   await requireOrgRole(userId, orgId, ['owner', 'admin', 'developer']);
+  await requireProject(orgId, projectId);
 
   const artifact = await prisma.artifact.findFirst({
     where: { id: artifactId, projectId, orgId },
@@ -95,6 +96,7 @@ export const DELETE = handler(async (req: NextRequest, ctx) => {
   const { orgId, projectId, artifactId } = await ctx.params;
   const { userId } = await requireAuth(req);
   await requireOrgRole(userId, orgId, ['owner', 'admin']);
+  await requireProject(orgId, projectId);
 
   const artifact = await prisma.artifact.findFirst({
     where: { id: artifactId, projectId, orgId },

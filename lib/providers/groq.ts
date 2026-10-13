@@ -3,11 +3,13 @@
  * Uses OpenAI-compatible API at https://api.groq.com/openai/v1
  */
 import OpenAI from "openai";
-import type {
-  ProviderAdapter,
-  TextGenerationRequest,
-  TextGenerationResult,
-  ModelInfo,
+import {
+  computeTextCostUsd,
+  normalizeFinishReason,
+  type ProviderAdapter,
+  type TextGenerationRequest,
+  type TextGenerationResult,
+  type ModelInfo,
 } from "./types";
 
 const GROQ_MODELS: ModelInfo[] = [
@@ -67,10 +69,10 @@ export class GroqAdapter implements ProviderAdapter {
     const start = Date.now();
 
     const messages: OpenAI.ChatCompletionMessageParam[] = req.messages
-      ? req.messages
+      ? [...req.messages]
       : [{ role: "user", content: req.prompt ?? "" }];
 
-    if (req.systemPrompt && (!req.messages || !req.messages.find((m) => m.role === "system"))) {
+    if (req.systemPrompt && !messages.some((m) => m.role === "system")) {
       messages.unshift({ role: "system", content: req.systemPrompt });
     }
 
@@ -83,14 +85,12 @@ export class GroqAdapter implements ProviderAdapter {
     });
 
     const latencyMs = Date.now() - start;
-    const content = completion.choices[0]?.message?.content ?? "";
+    const choice = completion.choices[0];
+    const content = choice?.message?.content ?? "";
     const usage = completion.usage ?? { prompt_tokens: 0, completion_tokens: 0 };
 
     const modelInfo = GROQ_MODELS.find((m) => m.id === req.model);
-    const costUsd = modelInfo
-      ? (usage.prompt_tokens * modelInfo.costInputPer1M) / 1_000_000 +
-        (usage.completion_tokens * modelInfo.costOutputPer1M) / 1_000_000
-      : 0;
+    const costUsd = computeTextCostUsd(modelInfo, usage.prompt_tokens, usage.completion_tokens);
 
     return {
       text: content,
@@ -102,9 +102,20 @@ export class GroqAdapter implements ProviderAdapter {
         costUsd,
       },
       latencyMs,
+      finishReason: normalizeFinishReason(choice?.finish_reason),
     };
   }
 }
 
-// Singleton instance for convenience
-export const groq = new GroqAdapter();
+let groqInstance: GroqAdapter | null = null;
+
+/** Lazily-created singleton so importing this module never throws when GROQ_API_KEY is unset. */
+export function getGroq(): GroqAdapter {
+  if (!groqInstance) groqInstance = new GroqAdapter();
+  return groqInstance;
+}
+
+/** Facade used by worker activities; the adapter is created on first call. */
+export const groq = {
+  generateText: (req: TextGenerationRequest) => getGroq().generateText(req),
+};

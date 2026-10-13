@@ -56,6 +56,7 @@ export class HuggingFaceAdapter implements ProviderAdapter {
     throw new Error("HuggingFace adapter does not support text generation. Use GroqAdapter.");
   }
 
+
   async generateImage(req: ImageGenerationRequest): Promise<ImageGenerationResult> {
     const start = Date.now();
     const model = req.model ?? "black-forest-labs/FLUX.1-schnell";

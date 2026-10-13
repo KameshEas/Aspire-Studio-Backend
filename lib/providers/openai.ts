@@ -1,157 +1,131 @@
 /**
- * OpenAI Provider Adapter
- * Implements unified ProviderAdapter interface for OpenAI APIs
+ * OpenAI provider adapter — chat completions + DALL·E image generation.
  */
-
-import OpenAI from 'openai';
+import OpenAI from "openai";
 import {
-  GenerateTextRequest,
-  GenerateTextResponse,
-  GenerateImageRequest,
-  GenerateImageResponse,
-  ModelInfo,
-  ProviderAdapter,
-} from './types';
+  computeTextCostUsd,
+  normalizeFinishReason,
+  type ImageGenerationRequest,
+  type ImageGenerationResult,
+  type ModelInfo,
+  type ProviderAdapter,
+  type TextGenerationRequest,
+  type TextGenerationResult,
+} from "./types";
 
-class OpenAIProvider implements ProviderAdapter {
+const OPENAI_MODELS: ModelInfo[] = [
+  {
+    id: "gpt-4o",
+    name: "GPT-4o",
+    provider: "openai",
+    capabilities: ["text"],
+    contextWindow: 128000,
+    costInputPer1M: 2.5,
+    costOutputPer1M: 10,
+    description: "OpenAI flagship multimodal model.",
+  },
+  {
+    id: "gpt-4o-mini",
+    name: "GPT-4o mini",
+    provider: "openai",
+    capabilities: ["text"],
+    contextWindow: 128000,
+    costInputPer1M: 0.15,
+    costOutputPer1M: 0.6,
+    description: "Fast, low-cost model for lightweight tasks.",
+  },
+  {
+    id: "dall-e-3",
+    name: "DALL·E 3",
+    provider: "openai",
+    capabilities: ["image"],
+    contextWindow: 0,
+    costInputPer1M: 0,
+    costOutputPer1M: 0,
+    costPerImage: 0.04,
+    description: "OpenAI image generation (1024x1024 standard).",
+  },
+];
+
+export class OpenAIAdapter implements ProviderAdapter {
+  readonly name = "openai";
+
   private client: OpenAI;
-  private apiKey: string;
-  private defaultModel = 'gpt-4-turbo';
 
   constructor(apiKey?: string) {
-    const key = apiKey || process.env.OPENAI_API_KEY;
+    const key = apiKey ?? process.env.OPENAI_API_KEY;
     if (!key) {
-      throw new Error('OPENAI_API_KEY environment variable not set');
+      throw new Error("OPENAI_API_KEY not configured. Set the OPENAI_API_KEY environment variable.");
     }
-    this.apiKey = key;
     this.client = new OpenAI({ apiKey: key });
   }
 
-  async generateText(request: GenerateTextRequest): Promise<GenerateTextResponse> {
-    const messages: OpenAI.Messages.MessageParam[] = [
-      {
-        role: 'user',
-        content: request.prompt,
-      },
-    ];
+  listModels(): ModelInfo[] {
+    return OPENAI_MODELS;
+  }
 
-    try {
-      const response = await this.client.messages.create({
-        model: this.defaultModel,
-        max_tokens: request.maxTokens || 2048,
-        temperature: request.temperature ?? 0.7,
-        system: request.systemPrompt,
-        messages,
-      });
+  async generateText(req: TextGenerationRequest): Promise<TextGenerationResult> {
+    const start = Date.now();
 
-      const textContent = response.content.find((c) => c.type === 'text');
-      const text = textContent && 'text' in textContent ? textContent.text : '';
+    const messages: OpenAI.ChatCompletionMessageParam[] = req.messages
+      ? [...req.messages]
+      : [{ role: "user", content: req.prompt ?? "" }];
 
-      return {
-        text,
-        usage: {
-          tokensIn: response.usage.input_tokens,
-          tokensOut: response.usage.output_tokens,
-        },
-        model: response.model,
-        provider: 'openai',
-        finishReason: response.stop_reason === 'end_turn' ? 'stop' : 'unknown',
-      };
-    } catch (error) {
-      throw new Error(`OpenAI API error: ${error instanceof Error ? error.message : String(error)}`);
+    if (req.systemPrompt && !messages.some((m) => m.role === "system")) {
+      messages.unshift({ role: "system", content: req.systemPrompt });
     }
+
+    const completion = await this.client.chat.completions.create({
+      model: req.model,
+      messages,
+      max_tokens: req.maxTokens ?? 2048,
+      temperature: req.temperature ?? 0.7,
+      top_p: req.topP ?? 1,
+    });
+
+    const choice = completion.choices[0];
+    const tokensIn = completion.usage?.prompt_tokens ?? 0;
+    const tokensOut = completion.usage?.completion_tokens ?? 0;
+    const info = OPENAI_MODELS.find((m) => m.id === req.model);
+
+    return {
+      text: choice?.message?.content ?? "",
+      model: completion.model ?? req.model,
+      provider: this.name,
+      usage: { tokensIn, tokensOut, costUsd: computeTextCostUsd(info, tokensIn, tokensOut) },
+      latencyMs: Date.now() - start,
+      finishReason: normalizeFinishReason(choice?.finish_reason),
+    };
   }
 
-  async generateImage(request: GenerateImageRequest): Promise<GenerateImageResponse> {
-    try {
-      const response = await this.client.images.generate({
-        prompt: request.prompt,
-        n: request.quantity || 1,
-        size: this.mapSize(request.size),
-        model: 'dall-e-3',
-      });
+  async generateImage(req: ImageGenerationRequest): Promise<ImageGenerationResult> {
+    const start = Date.now();
+    const model = req.model ?? "dall-e-3";
 
-      return {
-        images: response.data.map((img) => ({
-          url: img.url || '',
-        })),
-        usage: {
-          imageCount: response.data.length,
-        },
-        model: 'dall-e-3',
-        provider: 'openai',
-      };
-    } catch (error) {
-      throw new Error(
-        `OpenAI image generation error: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
+    const response = await this.client.images.generate({
+      model,
+      prompt: req.prompt,
+      n: 1,
+      size: this.pickSize(req.width, req.height),
+      response_format: "b64_json",
+    });
+
+    const b64 = response.data?.[0]?.b64_json;
+    if (!b64) throw new Error("OpenAI image generation returned no image data");
+
+    return {
+      imageBase64: b64,
+      mimeType: "image/png",
+      model,
+      provider: this.name,
+      latencyMs: Date.now() - start,
+    };
   }
 
-  async listModels(): Promise<ModelInfo[]> {
-    return [
-      {
-        id: 'openai/gpt-4-turbo',
-        name: 'GPT-4 Turbo',
-        provider: 'openai',
-        capabilities: ['text-generation'],
-        contextWindow: 128000,
-        costPer1kTokensIn: 0.01,
-        costPer1kTokensOut: 0.03,
-      },
-      {
-        id: 'openai/gpt-4',
-        name: 'GPT-4',
-        provider: 'openai',
-        capabilities: ['text-generation'],
-        contextWindow: 8192,
-        costPer1kTokensIn: 0.03,
-        costPer1kTokensOut: 0.06,
-      },
-      {
-        id: 'openai/gpt-3.5-turbo',
-        name: 'GPT-3.5 Turbo',
-        provider: 'openai',
-        capabilities: ['text-generation'],
-        contextWindow: 16385,
-        costPer1kTokensIn: 0.0005,
-        costPer1kTokensOut: 0.0015,
-      },
-      {
-        id: 'openai/dall-e-3',
-        name: 'DALL-E 3',
-        provider: 'openai',
-        capabilities: ['image-generation'],
-        contextWindow: 0,
-        costPer1kTokensIn: 0,
-        costPer1kTokensOut: 0.08,
-      },
-    ];
+  /** DALL·E 3 supports only 1024x1024, 1792x1024 and 1024x1792. */
+  private pickSize(width = 1024, height = 1024): "1024x1024" | "1792x1024" | "1024x1792" {
+    if (width > height) return "1792x1024";
+    if (height > width) return "1024x1792";
+    return "1024x1024";
   }
-
-  async getModelInfo(modelId: string): Promise<ModelInfo> {
-    const models = await this.listModels();
-    const model = models.find((m) => m.id === modelId);
-    if (!model) {
-      throw new Error(`Unknown model: ${modelId}`);
-    }
-    return model;
-  }
-
-  private mapSize(size?: 'small' | 'medium' | 'large'): '256x256' | '512x512' | '1024x1024' {
-    switch (size) {
-      case 'small':
-        return '256x256';
-      case 'medium':
-        return '512x512';
-      case 'large':
-        return '1024x1024';
-      default:
-        return '1024x1024';
-    }
-  }
-}
-
-export function createOpenAIProvider(apiKey?: string): OpenAIProvider {
-  return new OpenAIProvider(apiKey);
 }

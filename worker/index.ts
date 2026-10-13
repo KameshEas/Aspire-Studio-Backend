@@ -9,8 +9,8 @@ import { getAllQueues } from '../lib/workflow/engine';
 import { registerJobProcessors } from './processor';
 
 // Load environment variables
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
-dotenv.config({ path: path.resolve(__dirname, '../../.env.local') });
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
 async function startWorker(): Promise<void> {
   try {

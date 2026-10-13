@@ -5,7 +5,7 @@ import { getStorage } from "@/lib/storage";
 import { validateOptionalEnum, VALID_GENERATION_STATUSES, VALID_JOB_TYPES } from "@/lib/validation";
 import { z } from "zod";
 import { interpolateTemplate, validateVariables, estimateTokens } from "@/lib/templates";
-import { getProviderForModel, getModelInfo, calculateGenerationCost } from "@/lib/providers";
+import { getProviderForModel, getModelInfo } from "@/lib/providers";
 import { checkTokenBudget, recordUsage } from "@/lib/rate-limit";
 
 /** GET /api/v1/orgs/[orgId]/projects/[projectId]/generations — list generations (paginated) */
@@ -82,7 +82,7 @@ export const POST = handler(async (req: NextRequest, ctx) => {
     const validatedData = GenerateSchema.parse(body);
 
     // ─── Step 1: Resolve prompt from template or direct ─────────
-    let finalPrompt = validatedData.prompt;
+    let finalPrompt: string = validatedData.prompt ?? "";
     let templateVersionId: string | null = null;
     let variablesSchema: any = null;
 
@@ -147,9 +147,9 @@ export const POST = handler(async (req: NextRequest, ctx) => {
     }
 
     // ─── Step 4: Validate model ─────────────────────────────────
-    let modelInfo: any;
+    let modelInfo: ReturnType<typeof getModelInfo>;
     try {
-      modelInfo = await getModelInfo(validatedData.model);
+      modelInfo = getModelInfo(validatedData.model);
     } catch {
       throw new ApiError(400, `Unknown model: ${validatedData.model}`);
     }
@@ -177,25 +177,35 @@ export const POST = handler(async (req: NextRequest, ctx) => {
 
     // ─── Step 6: Call provider with timeout ──────────────────────
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(
-        () => controller.abort(),
-        validatedData.timeout * 1000
-      );
-
       const provider = getProviderForModel(validatedData.model);
       const startTime = Date.now();
 
       console.log(`[Generation] Calling provider: ${modelInfo.provider}/${modelInfo.name}`);
 
-      const result = await provider.generateText({
-        prompt: finalPrompt,
-        systemPrompt: validatedData.systemPrompt,
-        maxTokens: validatedData.maxTokens || 2048,
-        temperature: validatedData.temperature ?? 0.7,
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          const err = new Error("Generation timeout exceeded");
+          err.name = "AbortError";
+          reject(err);
+        }, validatedData.timeout * 1000);
       });
 
-      clearTimeout(timeoutId);
+      let result: Awaited<ReturnType<typeof provider.generateText>>;
+      try {
+        result = await Promise.race([
+          provider.generateText({
+            model: validatedData.model,
+            prompt: finalPrompt,
+            systemPrompt: validatedData.systemPrompt,
+            maxTokens: validatedData.maxTokens || 2048,
+            temperature: validatedData.temperature ?? 0.7,
+          }),
+          timeout,
+        ]);
+      } finally {
+        clearTimeout(timeoutId);
+      }
       const latencyMs = Date.now() - startTime;
 
       console.log(
@@ -203,7 +213,8 @@ export const POST = handler(async (req: NextRequest, ctx) => {
       );
 
       // ─── Step 7: Store artifact ─────────────────────────────────
-      const artifactPath = `generations/${generation.id}/output.txt`;
+      const storageKey = `orgs/${orgId}/projects/${projectId}/generations/${generation.id}/output.txt`;
+      const stored = await getStorage().upload(storageKey, Buffer.from(result.text, "utf-8"), "text/plain");
 
       const artifact = await prisma.artifact.create({
         data: {
@@ -211,9 +222,9 @@ export const POST = handler(async (req: NextRequest, ctx) => {
           projectId,
           orgId,
           type: "text",
-          storageUrl: `s3://aspire-studio/${artifactPath}`,
+          storageUrl: stored.storageKey,
           fileName: "output.txt",
-          sizeBytes: BigInt(result.text.length),
+          sizeBytes: BigInt(stored.sizeBytes),
           metadata: {
             model: result.model,
             provider: result.provider,
@@ -226,11 +237,7 @@ export const POST = handler(async (req: NextRequest, ctx) => {
       console.log(`[Generation] Created artifact: ${artifact.id}`);
 
       // ─── Step 8: Calculate cost ─────────────────────────────────
-      const costUsd = await calculateGenerationCost(
-        validatedData.model,
-        result.usage.tokensIn,
-        result.usage.tokensOut
-      );
+      const costUsd = result.usage.costUsd;
 
       console.log(`[Generation] Cost: $${costUsd.toFixed(4)}`);
 
@@ -278,7 +285,7 @@ export const POST = handler(async (req: NextRequest, ctx) => {
               id: artifact.id,
               type: artifact.type,
               fileName: artifact.fileName,
-              downloadUrl: `/api/v1/orgs/${orgId}/projects/${projectId}/artifacts/${artifact.id}/download`,
+              downloadUrl: await getStorage().getSignedUrl(stored.storageKey),
               metadata: artifact.metadata,
             },
           ],

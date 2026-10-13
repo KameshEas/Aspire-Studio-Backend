@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { requireAuth, requireOrgRole, handler, ApiError } from "@/lib/auth";
+import { requireAuth, requireOrgRole, requireProject, handler, ApiError } from "@/lib/auth";
 
 /** GET /api/v1/orgs/[orgId]/projects/[projectId]/members */
 export const GET = handler(async (req: NextRequest, ctx) => {
   const { orgId, projectId } = await ctx.params;
   const { userId } = await requireAuth(req);
   await requireOrgRole(userId, orgId);
+
+  await requireProject(orgId, projectId);
 
   const members = await prisma.projectMember.findMany({
     where: { projectId },
@@ -31,6 +33,8 @@ export const POST = handler(async (req: NextRequest, ctx) => {
   const { orgId, projectId } = await ctx.params;
   const { userId } = await requireAuth(req);
   await requireOrgRole(userId, orgId, "admin");
+
+  await requireProject(orgId, projectId);
 
   const body = await req.json();
   const { userId: targetUserId, role = "developer" } = body as {
@@ -63,6 +67,8 @@ export const DELETE = handler(async (req: NextRequest, ctx) => {
   const { orgId, projectId } = await ctx.params;
   const { userId } = await requireAuth(req);
   await requireOrgRole(userId, orgId, "admin");
+
+  await requireProject(orgId, projectId);
 
   const body = await req.json();
   const { userId: targetUserId } = body as { userId: string };

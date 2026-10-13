@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { requireAuth, requireOrgRole, handler, ApiError } from '@/lib/auth';
+import { requireAuth, requireOrgRole, requireProject, handler, ApiError } from '@/lib/auth';
 import { validateVariablesSchema, extractVariablesFromPrompt } from '@/lib/templates';
 import { z } from 'zod';
 
@@ -17,6 +17,7 @@ export const GET = handler(async (req: NextRequest, ctx) => {
   const { orgId, projectId, templateId } = await ctx.params;
   const { userId } = await requireAuth(req);
   await requireOrgRole(userId, orgId);
+  await requireProject(orgId, projectId);
 
   const template = await prisma.template.findFirst({
     where: { id: templateId, projectId },
@@ -52,6 +53,7 @@ export const POST = handler(async (req: NextRequest, ctx) => {
   const { orgId, projectId, templateId } = await ctx.params;
   const { userId } = await requireAuth(req);
   await requireOrgRole(userId, orgId, ['owner', 'admin', 'developer']);
+  await requireProject(orgId, projectId);
 
   const template = await prisma.template.findFirst({
     where: { id: templateId, projectId },

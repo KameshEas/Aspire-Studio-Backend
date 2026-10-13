@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { requireAuth, requireOrgRole, handler, ApiError } from "@/lib/auth";
+import { requireAuth, requireOrgRole, requireProject, handler, ApiError } from "@/lib/auth";
 import { getStorage } from "@/lib/storage";
 
 /** GET /api/v1/orgs/[orgId]/projects/[projectId]/generations/[generationId] */
@@ -8,6 +8,8 @@ export const GET = handler(async (req: NextRequest, ctx) => {
   const { orgId, projectId, generationId } = await ctx.params;
   const { userId } = await requireAuth(req);
   await requireOrgRole(userId, orgId);
+
+  await requireProject(orgId, projectId);
 
   const generation = await prisma.generation.findFirst({
     where: { id: generationId, projectId, orgId },

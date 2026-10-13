@@ -124,7 +124,7 @@ export async function checkTokenBudget(
     });
 
     const totalUsed =
-      (monthlyUsage._sum.tokensIn || 0) + (monthlyUsage._sum.tokensOut || 0);
+      Number(monthlyUsage._sum.tokensIn ?? 0) + Number(monthlyUsage._sum.tokensOut ?? 0);
 
     // Check monthly budget
     if (totalUsed + estimatedTokens > monthlyQuota) {
@@ -162,7 +162,7 @@ export async function checkTokenBudget(
       });
 
       const dailyUsed =
-        (dailyUsage._sum.tokensIn || 0) + (dailyUsage._sum.tokensOut || 0);
+        Number(dailyUsage._sum.tokensIn ?? 0) + Number(dailyUsage._sum.tokensOut ?? 0);
 
       if (dailyUsed + estimatedTokens > dailyQuota) {
         return {

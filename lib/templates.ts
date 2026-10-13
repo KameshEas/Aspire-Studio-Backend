@@ -146,38 +146,25 @@ export function interpolateTemplate(
   schema?: VariablesSchema
 ): InterpolationResult {
   const warnings: InterpolationWarning[] = [];
-  let result = prompt;
-
-  // Find all {{variable}} patterns
-  const variableRegex = /\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g;
   const foundVariables = new Set<string>();
-  let match;
+  const warnedMissing = new Set<string>();
 
-  while ((match = variableRegex.exec(prompt)) !== null) {
-    const varName = match[1];
+  // A function replacement inserts values verbatim ($&, $1 and backslashes are not special)
+  const result = prompt.replace(/{{([a-zA-Z_][a-zA-Z0-9_]*)}}/g, (_match, varName: string) => {
     foundVariables.add(varName);
 
-    if (!(varName in variables)) {
+    if (varName in variables) return String(variables[varName]);
+
+    if (!warnedMissing.has(varName)) {
+      warnedMissing.add(varName);
       warnings.push({
         type: 'missing_variable',
         variable: varName,
         message: `Variable "${varName}" used in prompt but not provided`,
       });
-      // Replace with placeholder
-      result = result.replace(
-        new RegExp(`\\{\\{${varName}\\}\\}`, 'g'),
-        `[${varName}]`
-      );
-    } else {
-      const value = variables[varName];
-      // Escape special regex characters in the replacement
-      const escapedValue = String(value).replace(/[\\$&]/g, '\\$&');
-      result = result.replace(
-        new RegExp(`\\{\\{${varName}\\}\\}`, 'g'),
-        escapedValue
-      );
     }
-  }
+    return `[${varName}]`;
+  });
 
   // Check for unused variables
   if (schema) {
@@ -359,7 +346,7 @@ export function mergeVariablesSchema(
   detected: string[],
   existing?: VariablesSchema
 ): VariablesSchema {
-  const merged = { ...existing } || {};
+  const merged = { ...existing };
 
   for (const varName of detected) {
     if (!(varName in merged)) {

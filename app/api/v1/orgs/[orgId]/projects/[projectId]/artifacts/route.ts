@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { requireAuth, handler, ApiError } from '@/lib/auth';
+import { requireAuth, requireOrgRole, requireProject, handler } from '@/lib/auth';
 import { z } from 'zod';
 
 // ─── Validation Schema ───────────────────────────────────
@@ -16,6 +16,8 @@ const ListArtifactsSchema = z.object({
 export const GET = handler(async (req: NextRequest, ctx) => {
   const { orgId, projectId } = await ctx.params;
   const { userId } = await requireAuth(req);
+  await requireOrgRole(userId, orgId);
+  await requireProject(orgId, projectId);
 
   const { searchParams } = new URL(req.url);
   const params = {

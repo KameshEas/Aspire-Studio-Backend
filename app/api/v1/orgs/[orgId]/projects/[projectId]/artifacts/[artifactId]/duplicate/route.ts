@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { requireAuth, requireOrgRole, handler, ApiError } from '@/lib/auth';
+import { requireAuth, requireOrgRole, requireProject, handler, ApiError } from '@/lib/auth';
 
 // ─── POST: Duplicate Artifact ────────────────────────────
 export const POST = handler(async (req: NextRequest, ctx) => {
   const { orgId, projectId, artifactId } = await ctx.params;
   const { userId } = await requireAuth(req);
   await requireOrgRole(userId, orgId, ['owner', 'admin', 'developer']);
+  await requireProject(orgId, projectId);
 
   const original = await prisma.artifact.findFirst({
     where: { id: artifactId, projectId, orgId },
@@ -24,7 +25,7 @@ export const POST = handler(async (req: NextRequest, ctx) => {
       storageUrl: original.storageUrl,
       fileName: original.fileName ? `${original.fileName.replace(/\.[^/.]+$/, '')}_copy.${original.fileName.split('.').pop()}` : null,
       sizeBytes: original.sizeBytes,
-      metadata: original.metadata,
+      metadata: original.metadata ?? undefined,
       parentArtifactId: original.id, // Link to original
       status: 'draft',
       tags: original.tags.length > 0 ? [...original.tags, 'duplicated'] : ['duplicated'],

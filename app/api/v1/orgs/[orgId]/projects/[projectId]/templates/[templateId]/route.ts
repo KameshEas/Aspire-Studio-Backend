@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { requireAuth, requireOrgRole, handler, ApiError } from '@/lib/auth';
+import { requireAuth, requireOrgRole, requireProject, handler, ApiError } from '@/lib/auth';
 import { z } from 'zod';
 
 // ─── Validation Schemas ──────────────────────────────────
@@ -15,6 +15,7 @@ export const GET = handler(async (req: NextRequest, ctx) => {
   const { orgId, projectId, templateId } = await ctx.params;
   const { userId } = await requireAuth(req);
   await requireOrgRole(userId, orgId);
+  await requireProject(orgId, projectId);
 
   const template = await prisma.template.findFirst({
     where: { id: templateId, projectId },
@@ -22,7 +23,6 @@ export const GET = handler(async (req: NextRequest, ctx) => {
       versions: {
         orderBy: { version: 'desc' },
       },
-      _count: { select: { generations: true } },
     },
   });
 
@@ -47,7 +47,7 @@ export const GET = handler(async (req: NextRequest, ctx) => {
       createdAt: v.createdAt,
       updatedAt: v.updatedAt,
     })),
-    generationCount: template._count.generations,
+    generationCount: template.versions.reduce((sum, v) => sum + v.generationCount, 0),
     createdAt: template.createdAt,
     updatedAt: template.updatedAt,
   });
@@ -58,6 +58,7 @@ export const PATCH = handler(async (req: NextRequest, ctx) => {
   const { orgId, projectId, templateId } = await ctx.params;
   const { userId } = await requireAuth(req);
   await requireOrgRole(userId, orgId, ['owner', 'admin', 'developer']);
+  await requireProject(orgId, projectId);
 
   const template = await prisma.template.findFirst({
     where: { id: templateId, projectId },
@@ -107,6 +108,7 @@ export const DELETE = handler(async (req: NextRequest, ctx) => {
   const { orgId, projectId, templateId } = await ctx.params;
   const { userId } = await requireAuth(req);
   await requireOrgRole(userId, orgId, ['owner', 'admin']);
+  await requireProject(orgId, projectId);
 
   const template = await prisma.template.findFirst({
     where: { id: templateId, projectId },

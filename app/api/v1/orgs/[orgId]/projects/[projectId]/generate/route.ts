@@ -70,7 +70,7 @@ export const POST = rateLimit(20, 60_000)(handler(async (req: NextRequest, ctx) 
 
   if (body.templateId) {
     const query = body.templateVersionId
-      ? { id: body.templateVersionId, templateId: body.templateId }
+      ? { id: body.templateVersionId, templateId: body.templateId, template: { projectId } }
       : undefined;
 
     const version = query
