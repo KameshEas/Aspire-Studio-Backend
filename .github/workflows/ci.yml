@@ -11,6 +11,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/aspire_studio
       CLERK_SECRET_KEY: sk_test_ci_placeholder
+      STORAGE_SIGNING_SECRET: ci-placeholder
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

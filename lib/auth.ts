@@ -2,6 +2,7 @@ import { verifyToken } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "./prisma";
 import { corsPreflightResponse, applyCorsHeaders } from "./cors";
+import { ZodError } from "zod";
 
 export interface AuthContext {
   userId: string; // local DB user id
@@ -141,6 +142,17 @@ export function handler(
           NextResponse.json(
             { error: err.message, ...(err.details !== undefined && { details: err.details }) },
             { status: err.status }
+          )
+        );
+      }
+      if (err instanceof ZodError) {
+        return applyCorsHeaders(
+          NextResponse.json(
+            {
+              error: "Validation error",
+              details: err.errors.map((e) => ({ path: e.path.join("."), message: e.message })),
+            },
+            { status: 400 }
           )
         );
       }

@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import { LocalStorageAdapter } from "@/lib/storage";
+import { verifyStorageSignature } from "@/lib/storage/signing";
 
 const MIME_MAP: Record<string, string> = {
   txt: "text/plain",
@@ -21,11 +22,16 @@ const MIME_MAP: Record<string, string> = {
 };
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   ctx: { params: Promise<{ key: string[] }> }
 ) {
   const { key } = await ctx.params;
   const storageKey = key.join("/");
+
+  const query = new URL(req.url).searchParams;
+  if (!verifyStorageSignature(storageKey, query.get("exp"), query.get("sig"))) {
+    return NextResponse.json({ error: "Invalid or expired link" }, { status: 403 });
+  }
 
   // Strict format: must match orgs/{id}/projects/{id}/... structure
   if (!/^orgs\/[a-zA-Z0-9_-]+\/projects\/[a-zA-Z0-9_-]+\//.test(storageKey)) {
@@ -52,6 +58,9 @@ export async function GET(
     status: 200,
     headers: {
       "Content-Type": contentType,
+      ...(query.get("dl") === "1" && {
+        "Content-Disposition": `attachment; filename="${storageKey.split("/").pop()}"`,
+      }),
       "Cache-Control": "private, max-age=3600",
       "Content-Length": String(data.length),
     },

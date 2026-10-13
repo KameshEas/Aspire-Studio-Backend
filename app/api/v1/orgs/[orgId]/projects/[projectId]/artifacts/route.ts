@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth, requireOrgRole, requireProject, handler } from '@/lib/auth';
+import { getStorage } from '@/lib/storage';
 import { z } from 'zod';
 
 // ─── Validation Schema ───────────────────────────────────
@@ -22,13 +23,15 @@ export const GET = handler(async (req: NextRequest, ctx) => {
   const { searchParams } = new URL(req.url);
   const params = {
     type: searchParams.get('type') || undefined,
-    status: searchParams.get('status') || 'approved', // Default to approved
+    status: searchParams.get('status') || undefined,
     jobType: searchParams.get('jobType') || undefined,
     limit: parseInt(searchParams.get('limit') || '50'),
     offset: parseInt(searchParams.get('offset') || '0'),
   };
 
   const validatedParams = ListArtifactsSchema.parse(params);
+
+  const storage = getStorage();
 
   const artifacts = await prisma.artifact.findMany({
     where: {
@@ -62,7 +65,7 @@ export const GET = handler(async (req: NextRequest, ctx) => {
   });
 
   return NextResponse.json({
-    artifacts: artifacts.map((a) => ({
+    artifacts: await Promise.all(artifacts.map(async (a) => ({
       id: a.id,
       type: a.type,
       fileName: a.fileName,
@@ -73,8 +76,9 @@ export const GET = handler(async (req: NextRequest, ctx) => {
       generation: a.generation,
       createdAt: a.createdAt,
       updatedAt: a.updatedAt,
-      downloadUrl: `/api/v1/orgs/${orgId}/projects/${projectId}/artifacts/${a.id}/download`,
-    })),
+      metadata: a.metadata,
+      downloadUrl: await storage.getSignedUrl(a.storageUrl),
+    }))),
     total,
     limit: validatedParams.limit,
     offset: validatedParams.offset,

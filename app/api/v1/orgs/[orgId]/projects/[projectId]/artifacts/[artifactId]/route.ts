@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireAuth, requireOrgRole, requireProject, handler, ApiError } from '@/lib/auth';
+import { getStorage } from '@/lib/storage';
 import { z } from 'zod';
 
 // ─── Validation Schema ───────────────────────────────────
@@ -14,6 +15,8 @@ const UpdateArtifactSchema = z.object({
 export const GET = handler(async (req: NextRequest, ctx) => {
   const { orgId, projectId, artifactId } = await ctx.params;
   const { userId } = await requireAuth(req);
+  await requireOrgRole(userId, orgId);
+  await requireProject(orgId, projectId);
 
   const artifact = await prisma.artifact.findFirst({
     where: { id: artifactId, projectId, orgId },
@@ -52,7 +55,7 @@ export const GET = handler(async (req: NextRequest, ctx) => {
     derivatives: artifact.derivatives,
     createdAt: artifact.createdAt,
     updatedAt: artifact.updatedAt,
-    downloadUrl: `/api/v1/orgs/${orgId}/projects/${projectId}/artifacts/${artifactId}/download`,
+    downloadUrl: await getStorage().getSignedUrl(artifact.storageUrl),
   });
 });
 

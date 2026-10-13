@@ -4,6 +4,7 @@
  */
 import fs from "fs";
 import path from "path";
+import { signStorageUrl } from "./signing";
 
 export interface StorageUploadResult {
   /** Opaque URL/key — use getSignedUrl() or getPublicUrl() to access */
@@ -34,9 +35,8 @@ class LocalStorageAdapter implements StorageAdapter {
     return { storageKey: key, sizeBytes: data.length };
   }
 
-  async getSignedUrl(storageKey: string, _expiresInSeconds = 3600): Promise<string> {
-    // In local dev, serve via /api/v1/storage/[...key] pass-through route
-    return `/api/v1/storage/${storageKey}`;
+  async getSignedUrl(storageKey: string, expiresInSeconds = 3600): Promise<string> {
+    return signStorageUrl(storageKey, expiresInSeconds);
   }
 
   async delete(storageKey: string): Promise<void> {

@@ -7,17 +7,8 @@ import {
   listAllModels,
 } from "@/lib/providers";
 import { getStorage } from "@/lib/storage";
-import { rateLimit } from "@/lib/rate-limit";
-
-/**
- * Replace {{variableName}} placeholders in a prompt template string.
- */
-function interpolatePrompt(
-  prompt: string,
-  variables: Record<string, string>
-): string {
-  return prompt.replace(/\{\{(\w+)\}\}/g, (_, key) => variables[key] ?? `{{${key}}}`);
-}
+import { rateLimit, checkTokenBudget } from "@/lib/rate-limit";
+import { estimateTokens, interpolateTemplate, validateVariables } from "@/lib/templates";
 
 /**
  * POST /api/v1/orgs/[orgId]/projects/[projectId]/generate
@@ -66,6 +57,8 @@ export const POST = rateLimit(20, 60_000)(handler(async (req: NextRequest, ctx) 
 
   // Resolve prompt text
   let promptText = body.prompt ?? "";
+  let systemPrompt = body.systemPrompt;
+  let variablesSchema: Parameters<typeof validateVariables>[1] | undefined;
   let templateVersionId: string | null = null;
 
   if (body.templateId) {
@@ -83,13 +76,33 @@ export const POST = rateLimit(20, 60_000)(handler(async (req: NextRequest, ctx) 
     if (!version) throw new ApiError(404, "Template version not found");
     templateVersionId = version.id;
     promptText = version.prompt;
+    systemPrompt = systemPrompt ?? version.systemPrompt ?? undefined;
+    variablesSchema = (version.variablesSchema as unknown as typeof variablesSchema) ?? undefined;
   }
 
   if (!promptText.trim()) throw new ApiError(400, "prompt is required (or specify templateId)");
   if (promptText.length > 50000) throw new ApiError(400, "prompt exceeds maximum length (50000 chars)");
 
   const variables = body.variables ?? {};
-  const finalPrompt = interpolatePrompt(promptText, variables);
+  if (variablesSchema) {
+    const validation = validateVariables(variables, variablesSchema);
+    if (!validation.isValid) throw new ApiError(400, "Invalid variables", validation.errors);
+  }
+  const { interpolatedPrompt: finalPrompt } = interpolateTemplate(promptText, variables, variablesSchema);
+
+  const budget = await checkTokenBudget(
+    orgId,
+    projectId,
+    userId,
+    estimateTokens(finalPrompt) + (body.maxTokens ?? 2048)
+  );
+  if (!budget.allowed) {
+    return NextResponse.json(
+      { error: budget.reason, status: budget.status },
+      { status: 429, headers: budget.retryAfter ? { "Retry-After": String(budget.retryAfter) } : {} }
+    );
+  }
+
   const jobType = body.jobType ?? (isImageModel(body.model) ? "image" : "text");
 
   // Create Generation record
@@ -138,7 +151,7 @@ export const POST = rateLimit(20, 60_000)(handler(async (req: NextRequest, ctx) 
       const result = await provider.generateText({
         model: body.model,
         prompt: finalPrompt,
-        systemPrompt: body.systemPrompt,
+        systemPrompt,
         maxTokens: body.maxTokens ?? 2048,
         temperature: body.temperature ?? 0.7,
       });
@@ -170,6 +183,13 @@ export const POST = rateLimit(20, 60_000)(handler(async (req: NextRequest, ctx) 
         metadata: { model: body.model, provider: provider.name, latencyMs } as unknown as import("@prisma/client").Prisma.InputJsonValue,
       },
     });
+
+    if (templateVersionId) {
+      await prisma.templateVersion.update({
+        where: { id: templateVersionId },
+        data: { generationCount: { increment: 1 } },
+      });
+    }
 
     // Update generation to succeeded
     await prisma.generation.update({

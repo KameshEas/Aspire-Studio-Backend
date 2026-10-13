@@ -32,6 +32,8 @@ export const GET = handler(async (req: NextRequest, ctx) => {
     },
     include: {
       _count: { select: { artifacts: true } },
+      usageRecords: { take: 1, orderBy: { recordedAt: "desc" } },
+      templateVersion: { select: { version: true, template: { select: { id: true, name: true } } } },
     },
     orderBy: { createdAt: "desc" },
     take: limit + 1,
@@ -42,16 +44,30 @@ export const GET = handler(async (req: NextRequest, ctx) => {
   const items = hasMore ? generations.slice(0, limit) : generations;
 
   return NextResponse.json({
-    items: items.map((g) => ({
+    items: items.map((g) => {
+      const options = (g.options ?? {}) as { model?: string };
+      const input = (g.input ?? {}) as { prompt?: string; model?: string };
+      const usage = g.usageRecords[0];
+      return {
       id: g.id,
       jobType: g.jobType,
       status: g.status,
+      model: options.model ?? input.model ?? usage?.modelName ?? null,
+      provider: usage?.modelProvider ?? null,
+      promptPreview: input.prompt ? input.prompt.slice(0, 200) : null,
+      template: g.templateVersion
+        ? { id: g.templateVersion.template.id, name: g.templateVersion.template.name, version: g.templateVersion.version }
+        : null,
+      tokensIn: usage ? Number(usage.tokensIn) : null,
+      tokensOut: usage ? Number(usage.tokensOut) : null,
+      costCents: usage ? Number(usage.costCents) : null,
       artifactCount: g._count.artifacts,
       error: g.error,
       startedAt: g.startedAt,
       finishedAt: g.finishedAt,
       createdAt: g.createdAt,
-    })),
+      };
+    }),
     nextCursor: hasMore ? items[items.length - 1].id : null,
   });
 });

@@ -100,16 +100,15 @@ export async function checkTokenBudget(
       },
     });
 
-    if (!org || !org.subscriptions[0]) {
-      return {
-        allowed: false,
-        reason: 'No active subscription found for organization',
-      };
+    if (!org) {
+      return { allowed: false, reason: 'Organization not found' };
     }
 
-    const plan = org.subscriptions[0].plan;
-    const monthlyQuota =
-      ((plan.features as any)?.monthlyTokens as number) || 1000000;
+    // Orgs without a subscription run on a free allowance rather than being blocked
+    const plan = org.subscriptions[0]?.plan;
+    const monthlyQuota = plan
+      ? ((plan.features as any)?.monthlyTokens as number) || 1000000
+      : Number(process.env.FREE_MONTHLY_TOKENS) || 200000;
 
     // Get monthly usage (this month)
     const now = new Date();
